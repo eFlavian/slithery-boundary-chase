@@ -8,46 +8,105 @@ type Position = {
 };
 
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
+type FoodType = 'normal' | 'special';
 
 const GRID_SIZE = 64;
 const CELL_SIZE = 10;
 const INITIAL_SPEED = 100;
+const PORTAL_INTERVAL = 10000; // 10 seconds
+const SPEED_BOOST_DURATION = 5000; // 5 seconds
+const PORTAL_ACTIVE_DURATION = 5000; // 5 seconds
 
 const GameBoard: React.FC = () => {
   const [snake, setSnake] = useState<Position[]>([{ x: 32, y: 32 }]);
-  const [food, setFood] = useState<Position>({ x: 20, y: 20 });
+  const [food, setFood] = useState<Position & { type: FoodType }>({ x: 20, y: 20, type: 'normal' });
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(() => 
     parseInt(localStorage.getItem('snakeHighScore') || '0')
   );
+  const [portal, setPortal] = useState<Position | null>(null);
+  const [speedBoost, setSpeedBoost] = useState(false);
   const gameLoop = useRef<number>();
+  const speedBoostTimeout = useRef<number>();
+  const portalTimeout = useRef<number>();
+
+  const generateRandomPosition = (): Position => ({
+    x: Math.floor(Math.random() * GRID_SIZE),
+    y: Math.floor(Math.random() * GRID_SIZE),
+  });
 
   const generateFood = () => {
-    const newFood = {
-      x: Math.floor(Math.random() * GRID_SIZE),
-      y: Math.floor(Math.random() * GRID_SIZE),
-    };
-    // Make sure food doesn't spawn on snake
-    if (snake.some(segment => segment.x === newFood.x && segment.y === newFood.y)) {
+    const newFood = generateRandomPosition();
+    // Make sure food doesn't spawn on snake or portal
+    if (snake.some(segment => segment.x === newFood.x && segment.y === newFood.y) ||
+        (portal && portal.x === newFood.x && portal.y === newFood.y)) {
       return generateFood();
     }
-    return newFood;
+    return {
+      ...newFood,
+      type: Math.random() < 0.2 ? 'special' : 'normal' as FoodType // 20% chance for special food
+    };
+  };
+
+  const generatePortal = () => {
+    if (gameOver) return;
+    
+    const newPortal = generateRandomPosition();
+    // Make sure portal doesn't spawn on snake or food
+    if (snake.some(segment => segment.x === newPortal.x && segment.y === newPortal.y) ||
+        (food.x === newPortal.x && food.y === newPortal.y)) {
+      return generatePortal();
+    }
+    
+    setPortal(newPortal);
+    toast("Speed Portal has appeared!", {
+      duration: 3000,
+    });
+
+    // Remove portal after duration
+    portalTimeout.current = window.setTimeout(() => {
+      setPortal(null);
+    }, PORTAL_ACTIVE_DURATION);
+  };
+
+  const activateSpeedBoost = () => {
+    setSpeedBoost(true);
+    toast("Speed Boost activated!", {
+      duration: 2000,
+    });
+
+    // Clear existing timeout if there is one
+    if (speedBoostTimeout.current) {
+      window.clearTimeout(speedBoostTimeout.current);
+    }
+
+    // Set new timeout to disable speed boost
+    speedBoostTimeout.current = window.setTimeout(() => {
+      setSpeedBoost(false);
+      toast("Speed Boost ended!", {
+        duration: 2000,
+      });
+    }, SPEED_BOOST_DURATION);
   };
 
   const handleKeyPress = (event: KeyboardEvent) => {
-    switch (event.key) {
-      case 'ArrowUp':
+    switch (event.key.toLowerCase()) {
+      case 'arrowup':
+      case 'w':
         if (direction !== 'DOWN') setDirection('UP');
         break;
-      case 'ArrowDown':
+      case 'arrowdown':
+      case 's':
         if (direction !== 'UP') setDirection('DOWN');
         break;
-      case 'ArrowLeft':
+      case 'arrowleft':
+      case 'a':
         if (direction !== 'RIGHT') setDirection('LEFT');
         break;
-      case 'ArrowRight':
+      case 'arrowright':
+      case 'd':
         if (direction !== 'LEFT') setDirection('RIGHT');
         break;
     }
@@ -96,13 +155,31 @@ const GameBoard: React.FC = () => {
 
       const newSnake = [newHead, ...prevSnake];
       
+      // Check if snake hit portal
+      if (portal && newHead.x === portal.x && newHead.y === portal.y) {
+        setPortal(null);
+        activateSpeedBoost();
+      }
+
       // Check if snake ate food
       if (newHead.x === food.x && newHead.y === food.y) {
-        setScore(prev => prev + 1);
+        const points = food.type === 'special' ? 5 : 1;
+        setScore(prev => prev + points);
         setFood(generateFood());
-        toast("Score: " + (score + 1), {
-          duration: 1000,
-        });
+        
+        // For special food, add 4 more segments
+        if (food.type === 'special') {
+          for (let i = 0; i < 4; i++) {
+            newSnake.push({ ...newSnake[newSnake.length - 1] });
+          }
+          toast("Special food! +5 points!", {
+            duration: 1000,
+          });
+        } else {
+          toast("Score: " + (score + 1), {
+            duration: 1000,
+          });
+        }
         return newSnake;
       }
 
@@ -117,6 +194,16 @@ const GameBoard: React.FC = () => {
     setDirection('RIGHT');
     setGameOver(false);
     setScore(0);
+    setSpeedBoost(false);
+    setPortal(null);
+    
+    // Clear any existing timeouts
+    if (speedBoostTimeout.current) {
+      window.clearTimeout(speedBoostTimeout.current);
+    }
+    if (portalTimeout.current) {
+      window.clearTimeout(portalTimeout.current);
+    }
   };
 
   useEffect(() => {
@@ -126,10 +213,22 @@ const GameBoard: React.FC = () => {
 
   useEffect(() => {
     if (!gameOver) {
-      gameLoop.current = window.setInterval(updateGame, INITIAL_SPEED);
+      gameLoop.current = window.setInterval(updateGame, speedBoost ? INITIAL_SPEED / 2 : INITIAL_SPEED);
       return () => clearInterval(gameLoop.current);
     }
-  }, [gameOver, direction]);
+  }, [gameOver, direction, speedBoost]);
+
+  // Portal spawn interval
+  useEffect(() => {
+    if (!gameOver) {
+      const interval = setInterval(() => {
+        if (!portal) {
+          generatePortal();
+        }
+      }, PORTAL_INTERVAL);
+      return () => clearInterval(interval);
+    }
+  }, [gameOver, portal]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -137,6 +236,9 @@ const GameBoard: React.FC = () => {
         <div className="text-sm uppercase tracking-wide text-gray-500 mb-1">Score</div>
         <div className="text-4xl font-bold text-gray-800">{score}</div>
         <div className="text-sm text-gray-500 mt-1">High Score: {highScore}</div>
+        {speedBoost && (
+          <div className="text-sm text-blue-500 mt-2 animate-pulse">Speed Boost Active!</div>
+        )}
       </div>
 
       <div 
@@ -179,7 +281,7 @@ const GameBoard: React.FC = () => {
 
           {/* Food */}
           <div
-            className="absolute bg-red-500 rounded-full snake-food"
+            className={`absolute rounded-full snake-food ${food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'}`}
             style={{
               width: CELL_SIZE - 2,
               height: CELL_SIZE - 2,
@@ -187,6 +289,20 @@ const GameBoard: React.FC = () => {
               top: food.y * CELL_SIZE,
             }}
           />
+
+          {/* Portal */}
+          {portal && (
+            <div
+              className="absolute bg-blue-500 rounded-full animate-pulse"
+              style={{
+                width: CELL_SIZE,
+                height: CELL_SIZE,
+                left: portal.x * CELL_SIZE,
+                top: portal.y * CELL_SIZE,
+                boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)',
+              }}
+            />
+          )}
         </div>
       </div>
 
