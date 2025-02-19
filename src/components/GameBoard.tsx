@@ -16,6 +16,7 @@ const INITIAL_SPEED = 100;
 const PORTAL_INTERVAL = 10000; // 10 seconds
 const SPEED_BOOST_DURATION = 5000; // 5 seconds
 const PORTAL_ACTIVE_DURATION = 5000; // 5 seconds
+const MAX_SPEED_BOOSTS = 3;
 
 const GameBoard: React.FC = () => {
   const [snake, setSnake] = useState<Position[]>([{ x: 32, y: 32 }]);
@@ -28,6 +29,7 @@ const GameBoard: React.FC = () => {
   );
   const [portal, setPortal] = useState<Position | null>(null);
   const [speedBoost, setSpeedBoost] = useState(false);
+  const [speedBoostCount, setSpeedBoostCount] = useState(0);
   const gameLoop = useRef<number>();
   const speedBoostTimeout = useRef<number>();
   const portalTimeout = useRef<number>();
@@ -51,7 +53,7 @@ const GameBoard: React.FC = () => {
   };
 
   const generatePortal = () => {
-    if (gameOver) return;
+    if (gameOver || speedBoostCount >= MAX_SPEED_BOOSTS) return;
     
     const newPortal = generateRandomPosition();
     // Make sure portal doesn't spawn on snake or food
@@ -72,7 +74,10 @@ const GameBoard: React.FC = () => {
   };
 
   const activateSpeedBoost = () => {
+    if (speedBoost || speedBoostCount === 0) return;
+
     setSpeedBoost(true);
+    setSpeedBoostCount(prev => prev - 1);
     toast("Speed Boost activated!", {
       duration: 2000,
     });
@@ -108,6 +113,9 @@ const GameBoard: React.FC = () => {
       case 'arrowright':
       case 'd':
         if (direction !== 'LEFT') setDirection('RIGHT');
+        break;
+      case ' ': // Spacebar
+        activateSpeedBoost();
         break;
     }
   };
@@ -158,7 +166,16 @@ const GameBoard: React.FC = () => {
       // Check if snake hit portal
       if (portal && newHead.x === portal.x && newHead.y === portal.y) {
         setPortal(null);
-        activateSpeedBoost();
+        if (speedBoostCount < MAX_SPEED_BOOSTS) {
+          setSpeedBoostCount(prev => prev + 1);
+          toast(`Speed Boost collected! (${speedBoostCount + 1}/${MAX_SPEED_BOOSTS})`, {
+            duration: 2000,
+          });
+        } else {
+          toast("Maximum Speed Boosts reached!", {
+            duration: 2000,
+          });
+        }
       }
 
       // Check if snake ate food
@@ -195,6 +212,7 @@ const GameBoard: React.FC = () => {
     setGameOver(false);
     setScore(0);
     setSpeedBoost(false);
+    setSpeedBoostCount(0);
     setPortal(null);
     
     // Clear any existing timeouts
@@ -236,6 +254,16 @@ const GameBoard: React.FC = () => {
         <div className="text-sm uppercase tracking-wide text-gray-500 mb-1">Score</div>
         <div className="text-4xl font-bold text-gray-800">{score}</div>
         <div className="text-sm text-gray-500 mt-1">High Score: {highScore}</div>
+        <div className="flex items-center justify-center gap-2 mt-2">
+          {[...Array(MAX_SPEED_BOOSTS)].map((_, i) => (
+            <div
+              key={i}
+              className={`w-3 h-3 rounded-full ${
+                i < speedBoostCount ? 'bg-blue-500' : 'bg-gray-200'
+              }`}
+            />
+          ))}
+        </div>
         {speedBoost && (
           <div className="text-sm text-blue-500 mt-2 animate-pulse">Speed Boost Active!</div>
         )}
