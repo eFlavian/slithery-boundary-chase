@@ -11,12 +11,12 @@ type FoodType = 'normal' | 'special';
 
 const GRID_SIZE = 64;
 const CELL_SIZE = 10;
-const INITIAL_SPEED = 100;
-const PORTAL_INTERVAL = 10000; // 10 seconds
-const PORTAL_ACTIVE_DURATION = 5000; // 5 seconds
-const SPEED_BOOST_INCREMENT = 25; // 25% per portal
-const MAX_SPEED_BOOST = 100; // 100% maximum
-const SPEED_CONSUMPTION_RATE = 0.5; // Consume 0.5% per game tick when holding spacebar
+const INITIAL_SPEED = 150;
+const PORTAL_INTERVAL = 10000;
+const PORTAL_ACTIVE_DURATION = 5000;
+const SPEED_BOOST_INCREMENT = 25;
+const MAX_SPEED_BOOST = 100;
+const SPEED_CONSUMPTION_RATE = 0.5;
 
 const GameBoard: React.FC = () => {
   const [snake, setSnake] = useState<Position[]>([{ x: 32, y: 32 }]);
@@ -106,7 +106,15 @@ const GameBoard: React.FC = () => {
       return true;
     }
     
-    return snake.slice(0, -1).some(segment => 
+    const cornerCollision = snake.slice(1, 4).some(segment => 
+      segment.x === head.x && segment.y === head.y
+    );
+
+    if (cornerCollision) {
+      return Math.random() > 0.8;
+    }
+    
+    return snake.slice(4, -1).some(segment => 
       segment.x === head.x && segment.y === head.y
     );
   };
@@ -274,7 +282,9 @@ const GameBoard: React.FC = () => {
           {snake.map((segment, index) => (
             <div
               key={index}
-              className="absolute bg-gray-800 rounded-sm transition-all duration-100"
+              className={`absolute transition-all duration-150 ease-linear ${
+                index === 0 ? 'z-20' : ''
+              }`}
               style={{
                 width: CELL_SIZE - 1,
                 height: CELL_SIZE - 1,
@@ -282,7 +292,33 @@ const GameBoard: React.FC = () => {
                 top: segment.y * CELL_SIZE,
                 opacity: index === 0 ? 1 : 0.8 - index * 0.1,
               }}
-            />
+            >
+              {index === 0 ? (
+                <>
+                  <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
+                    <span className="text-[10px] font-medium text-gray-600 tracking-tight">
+                      User1
+                    </span>
+                    <svg 
+                      className="w-2 h-2 text-gray-600 mt-0.5" 
+                      fill="currentColor" 
+                      viewBox="0 0 16 16"
+                    >
+                      <path d="M8 10l-4-4h8l-4 4z"/>
+                    </svg>
+                  </div>
+                  <img
+                    src="/placeholder.svg"
+                    alt="User"
+                    className="w-full h-full rounded-sm object-cover"
+                  />
+                </>
+              ) : (
+                <div 
+                  className="w-full h-full bg-gray-800 rounded-sm"
+                />
+              )}
+            </div>
           ))}
 
           <div
