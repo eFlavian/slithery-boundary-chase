@@ -17,14 +17,16 @@ type Portal = Position;
 const GRID_SIZE = 256;
 const CELL_SIZE = 10;
 const INITIAL_SPEED = 150;
-const INITIAL_FOOD_COUNT = 50;
-const INITIAL_PORTAL_COUNT = 2;
-const FOOD_SPAWN_INTERVAL = 5000; // 5 seconds
-const PORTAL_SPAWN_INTERVAL = 20000; // 20 seconds
+const INITIAL_NORMAL_FOOD = 100;
+const INITIAL_SPECIAL_FOOD = 30;
+const INITIAL_PORTAL_COUNT = 5;
+const FOOD_SPAWN_INTERVAL = 5000;
+const PORTAL_SPAWN_INTERVAL = 20000;
 const SPEED_BOOST_INCREMENT = 25;
 const MAX_SPEED_BOOST = 100;
 const SPEED_CONSUMPTION_RATE = 0.5;
 const VISIBLE_AREA_SIZE = 64;
+const MIN_SNAKE_OPACITY = 0.3;
 
 const GameBoard: React.FC = () => {
   const { theme, setTheme } = useTheme();
@@ -79,8 +81,18 @@ const GameBoard: React.FC = () => {
     const initialFoods: FoodItem[] = [];
     const initialPortals: Portal[] = [];
 
-    for (let i = 0; i < INITIAL_FOOD_COUNT; i++) {
-      initialFoods.push(generateFood());
+    for (let i = 0; i < INITIAL_NORMAL_FOOD; i++) {
+      initialFoods.push({
+        ...generateRandomPosition(),
+        type: 'normal'
+      });
+    }
+
+    for (let i = 0; i < INITIAL_SPECIAL_FOOD; i++) {
+      initialFoods.push({
+        ...generateRandomPosition(),
+        type: 'special'
+      });
     }
 
     for (let i = 0; i < INITIAL_PORTAL_COUNT; i++) {
@@ -151,13 +163,14 @@ const GameBoard: React.FC = () => {
   };
 
   const updateGame = () => {
-    if (isSpeedBoostActive && speedBoostPercentage > 0) {
-      setSpeedBoostPercentage(prev => Math.max(0, prev - SPEED_CONSUMPTION_RATE));
+    if (isSpeedBoostActive) {
       if (speedBoostPercentage <= 0) {
         setIsSpeedBoostActive(false);
         toast("Speed boost depleted!", {
           duration: 2000,
         });
+      } else {
+        setSpeedBoostPercentage(prev => Math.max(0, prev - SPEED_CONSUMPTION_RATE));
       }
     }
 
@@ -183,7 +196,6 @@ const GameBoard: React.FC = () => {
 
       const newSnake = [newHead, ...prevSnake];
       
-      // Check portal collision
       const portalHit = portals.findIndex(portal => 
         portal.x === newHead.x && portal.y === newHead.y
       );
@@ -197,7 +209,6 @@ const GameBoard: React.FC = () => {
         });
       }
 
-      // Check food collision
       const foodHit = foods.findIndex(food => 
         food.x === newHead.x && food.y === newHead.y
       );
@@ -239,19 +250,22 @@ const GameBoard: React.FC = () => {
   };
 
   const createHashPattern = () => {
-    const pattern = (
-      <svg width="20" height="20" xmlns="http://www.w3.org/2000/svg" className="absolute inset-0">
-        <pattern id="hash" width="20" height="20" patternUnits="userSpaceOnUse">
-          <rect width="20" height="20" fill="none"/>
-          <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
-                stroke="#ea384c" 
-                strokeWidth="2" 
-                opacity="0.5"/>
-        </pattern>
-        <rect width="100%" height="100%" fill="url(#hash)"/>
-      </svg>
+    return (
+      <div className="absolute inset-0 w-full h-full">
+        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="hash" width="20" height="20" patternUnits="userSpaceOnUse">
+              <rect width="20" height="20" fill="none"/>
+              <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
+                    stroke="#ea384c" 
+                    strokeWidth="2" 
+                    opacity="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#hash)"/>
+        </svg>
+      </div>
     );
-    return pattern;
   };
 
   useEffect(() => {
@@ -271,7 +285,6 @@ const GameBoard: React.FC = () => {
     }
   }, [gameOver, direction, isSpeedBoostActive]);
 
-  // Food spawn interval
   useEffect(() => {
     if (!gameOver) {
       const foodInterval = setInterval(() => {
@@ -281,7 +294,6 @@ const GameBoard: React.FC = () => {
     }
   }, [gameOver]);
 
-  // Portal spawn interval
   useEffect(() => {
     if (!gameOver) {
       const portalInterval = setInterval(() => {
@@ -291,7 +303,6 @@ const GameBoard: React.FC = () => {
     }
   }, [gameOver]);
 
-  // Initialize game
   useEffect(() => {
     startGame();
   }, []);
@@ -335,6 +346,7 @@ const GameBoard: React.FC = () => {
         }}
       >
         <div className="relative border-2 border-gray-200 dark:border-gray-700 w-full h-full overflow-hidden">
+          {createHashPattern()}
           <div
             className="absolute transition-all duration-150 ease-linear"
             style={{
@@ -366,7 +378,7 @@ const GameBoard: React.FC = () => {
                   height: CELL_SIZE - 1,
                   left: segment.x * CELL_SIZE,
                   top: segment.y * CELL_SIZE,
-                  opacity: index === 0 ? 1 : 0.8 - index * 0.1,
+                  opacity: Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
                 }}
               >
                 {index === 0 ? (
