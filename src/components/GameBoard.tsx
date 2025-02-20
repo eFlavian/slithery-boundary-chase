@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 
 type Position = {
   x: number;
@@ -51,7 +52,7 @@ const GameBoard: React.FC = () => {
   };
 
   const generatePortal = () => {
-    if (gameOver || speedBoostPercentage >= MAX_SPEED_BOOST) return;
+    if (gameOver || speedBoostPercentage >= MAX_SPEED_BOOST || portal) return;
     
     const newPortal = generateRandomPosition();
     if (snake.some(segment => segment.x === newPortal.x && segment.y === newPortal.y) ||
@@ -63,31 +64,44 @@ const GameBoard: React.FC = () => {
     toast("Speed Portal has appeared!", {
       duration: 3000,
     });
+  };
 
-    portalTimeout.current = window.setTimeout(() => {
-      setPortal(null);
-    }, PORTAL_ACTIVE_DURATION);
+  const handleDirection = (newDirection: Direction) => {
+    switch (newDirection) {
+      case 'UP':
+        if (direction !== 'DOWN') setDirection('UP');
+        break;
+      case 'DOWN':
+        if (direction !== 'UP') setDirection('DOWN');
+        break;
+      case 'LEFT':
+        if (direction !== 'RIGHT') setDirection('LEFT');
+        break;
+      case 'RIGHT':
+        if (direction !== 'LEFT') setDirection('RIGHT');
+        break;
+    }
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
     switch (event.key.toLowerCase()) {
       case 'arrowup':
       case 'w':
-        if (direction !== 'DOWN') setDirection('UP');
+        handleDirection('UP');
         break;
       case 'arrowdown':
       case 's':
-        if (direction !== 'UP') setDirection('DOWN');
+        handleDirection('DOWN');
         break;
       case 'arrowleft':
       case 'a':
-        if (direction !== 'RIGHT') setDirection('LEFT');
+        handleDirection('LEFT');
         break;
       case 'arrowright':
       case 'd':
-        if (direction !== 'LEFT') setDirection('RIGHT');
+        handleDirection('RIGHT');
         break;
-      case ' ': // Spacebar press
+      case ' ':
         if (speedBoostPercentage > 0) {
           setIsSpeedBoostActive(true);
         }
@@ -238,8 +252,8 @@ const GameBoard: React.FC = () => {
   }, [gameOver, portal]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
-      <div className="relative mb-4 text-center">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 px-4">
+      <div className="relative mb-4 text-center w-full max-w-lg">
         <div className="text-sm uppercase tracking-wide text-gray-500 mb-1">Score</div>
         <div className="text-4xl font-bold text-gray-800">{score}</div>
         <div className="text-sm text-gray-500 mt-1">High Score: {highScore}</div>
@@ -258,23 +272,24 @@ const GameBoard: React.FC = () => {
       </div>
 
       <div 
-        className="relative bg-white rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90"
+        className="relative bg-white rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 border-2 border-gray-300"
         style={{
-          width: GRID_SIZE * CELL_SIZE + 32,
+          width: '100%',
+          maxWidth: GRID_SIZE * CELL_SIZE + 32,
           height: GRID_SIZE * CELL_SIZE + 32,
         }}
       >
         <div 
-          className="relative"
+          className="relative border-2 border-gray-200"
           style={{
-            width: GRID_SIZE * CELL_SIZE,
-            height: GRID_SIZE * CELL_SIZE,
+            width: '100%',
+            paddingBottom: '100%',
           }}
         >
-          <div 
+          <div
             className="absolute inset-0"
             style={{
-              backgroundImage: 'radial-gradient(circle, #00000005 1px, transparent 1px)',
+              backgroundImage: 'radial-gradient(circle, #00000010 1px, transparent 1px)',
               backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
             }}
           />
@@ -344,6 +359,48 @@ const GameBoard: React.FC = () => {
             />
           )}
         </div>
+      </div>
+
+      <div className="md:hidden mt-8 relative w-48 h-48">
+        <button
+          className="absolute top-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 rounded-lg active:bg-gray-300 border-2 border-gray-300"
+          onClick={() => handleDirection('UP')}
+        >
+          <ArrowUp className="w-6 h-6 text-gray-700" />
+        </button>
+        
+        <button
+          className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 rounded-lg active:bg-gray-300 border-2 border-gray-300"
+          onClick={() => handleDirection('LEFT')}
+        >
+          <ArrowLeft className="w-6 h-6 text-gray-700" />
+        </button>
+        
+        <button
+          className="absolute right-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 rounded-lg active:bg-gray-300 border-2 border-gray-300"
+          onClick={() => handleDirection('RIGHT')}
+        >
+          <ArrowRight className="w-6 h-6 text-gray-700" />
+        </button>
+        
+        <button
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 rounded-lg active:bg-gray-300 border-2 border-gray-300"
+          onClick={() => handleDirection('DOWN')}
+        >
+          <ArrowDown className="w-6 h-6 text-gray-700" />
+        </button>
+
+        <button
+          className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${
+            speedBoostPercentage > 0 ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-400'
+          } border-2 border-gray-300`}
+          onTouchStart={() => {
+            if (speedBoostPercentage > 0) setIsSpeedBoostActive(true);
+          }}
+          onTouchEnd={() => setIsSpeedBoostActive(false)}
+        >
+          BOOST
+        </button>
       </div>
 
       {gameOver && (
