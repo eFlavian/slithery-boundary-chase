@@ -15,7 +15,7 @@ type FoodItem = Position & { type: FoodType };
 type Portal = Position;
 
 const GRID_SIZE = 256;
-const CELL_SIZE = 10;
+const CELL_SIZE = 15;
 const INITIAL_SPEED = 150;
 const INITIAL_NORMAL_FOOD = 100;
 const INITIAL_SPECIAL_FOOD = 30;
@@ -251,13 +251,13 @@ const GameBoard: React.FC = () => {
 
   const createHashPattern = () => {
     return (
-      <div className="absolute inset-0 w-full h-full">
+      <div className="absolute inset-0 w-full h-full" style={{ backgroundColor:'rgba(30,30,30,0.2)' }}>
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="hash" width="20" height="20" patternUnits="userSpaceOnUse">
               <rect width="20" height="20" fill="none"/>
               <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
-                    stroke="#ea384c" 
+                    stroke="#1e1e1e" 
                     strokeWidth="2" 
                     opacity="0.5"/>
             </pattern>
@@ -355,11 +355,12 @@ const GameBoard: React.FC = () => {
               transform: `translate(${-snake[0].x * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px, ${-snake[0].y * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px)`,
             }}
           >
-            {createHashPattern()}
+            {/* {createHashPattern()} */}
 
             <div
               className="absolute"
               style={{
+                backgroundColor:'white',
                 backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px)',
                 backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
                 width: '100%',
@@ -396,7 +397,7 @@ const GameBoard: React.FC = () => {
                       </svg>
                     </div>
                     <img
-                      src="/placeholder.svg"
+                      src="/defaultPic.webp"
                       alt="User"
                       className="w-full h-full rounded-sm object-cover"
                     />
