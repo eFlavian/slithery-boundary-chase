@@ -120,15 +120,7 @@ const GameBoard: React.FC = () => {
       return true;
     }
     
-    const cornerCollision = snake.slice(1, 4).some(segment => 
-      segment.x === head.x && segment.y === head.y
-    );
-
-    if (cornerCollision) {
-      return Math.random() > 0.8;
-    }
-    
-    return snake.slice(4, -1).some(segment => 
+    return snake.slice(4).some(segment => 
       segment.x === head.x && segment.y === head.y
     );
   };
@@ -252,18 +244,18 @@ const GameBoard: React.FC = () => {
   }, [gameOver, portal]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 px-4">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <div className="relative mb-4 text-center w-full max-w-lg">
-        <div className="text-sm uppercase tracking-wide text-gray-500 mb-1">Score</div>
-        <div className="text-4xl font-bold text-gray-800">{score}</div>
-        <div className="text-sm text-gray-500 mt-1">High Score: {highScore}</div>
-        <div className="w-48 h-2 bg-gray-200 rounded-full mt-4 overflow-hidden">
+        <div className="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Score</div>
+        <div className="text-4xl font-bold text-gray-800 dark:text-white">{score}</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">High Score: {highScore}</div>
+        <div className="w-48 h-2 bg-gray-200 dark:bg-gray-700 rounded-full mt-4 overflow-hidden">
           <div 
             className="h-full bg-blue-500 transition-all duration-100"
             style={{ width: `${speedBoostPercentage}%` }}
           />
         </div>
-        <div className="text-sm text-gray-500 mt-1">
+        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Speed Boost: {Math.round(speedBoostPercentage)}%
         </div>
         {isSpeedBoostActive && (
@@ -272,128 +264,135 @@ const GameBoard: React.FC = () => {
       </div>
 
       <div 
-        className="relative bg-white rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 border-2 border-gray-300"
+        className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
         style={{
           width: '100%',
-          maxWidth: GRID_SIZE * CELL_SIZE + 32,
-          height: GRID_SIZE * CELL_SIZE + 32,
+          maxWidth: '90vmin',
+          height: '90vmin',
         }}
       >
         <div 
-          className="relative border-2 border-gray-200"
-          style={{
-            width: '100%',
-            paddingBottom: '100%',
-          }}
+          className="relative border-2 border-gray-200 dark:border-gray-700 w-full h-full overflow-hidden"
         >
           <div
-            className="absolute inset-0"
+            className="absolute transition-all duration-150 ease-linear"
             style={{
-              backgroundImage: 'radial-gradient(circle, #00000010 1px, transparent 1px)',
-              backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
+              width: GRID_SIZE * CELL_SIZE,
+              height: GRID_SIZE * CELL_SIZE,
+              transform: `translate(${-snake[0].x * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px, ${-snake[0].y * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px)`,
             }}
-          />
-
-          {snake.map((segment, index) => (
+          >
             <div
-              key={index}
-              className={`absolute transition-all duration-150 ease-linear ${
-                index === 0 ? 'z-20' : ''
-              }`}
+              className="absolute inset-0"
               style={{
-                width: CELL_SIZE - 1,
-                height: CELL_SIZE - 1,
-                left: segment.x * CELL_SIZE,
-                top: segment.y * CELL_SIZE,
-                opacity: index === 0 ? 1 : 0.8 - index * 0.1,
-              }}
-            >
-              {index === 0 ? (
-                <>
-                  <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
-                    <span className="text-[10px] font-medium text-gray-600 tracking-tight">
-                      User1
-                    </span>
-                    <svg 
-                      className="w-2 h-2 text-gray-600 mt-0.5" 
-                      fill="currentColor" 
-                      viewBox="0 0 16 16"
-                    >
-                      <path d="M8 10l-4-4h8l-4 4z"/>
-                    </svg>
-                  </div>
-                  <img
-                    src="/placeholder.svg"
-                    alt="User"
-                    className="w-full h-full rounded-sm object-cover"
-                  />
-                </>
-              ) : (
-                <div 
-                  className="w-full h-full bg-gray-800 rounded-sm"
-                />
-              )}
-            </div>
-          ))}
-
-          <div
-            className={`absolute rounded-full snake-food ${food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'}`}
-            style={{
-              width: CELL_SIZE - 2,
-              height: CELL_SIZE - 2,
-              left: food.x * CELL_SIZE,
-              top: food.y * CELL_SIZE,
-            }}
-          />
-
-          {portal && (
-            <div
-              className="absolute bg-blue-500 rounded-full animate-pulse"
-              style={{
-                width: CELL_SIZE,
-                height: CELL_SIZE,
-                left: portal.x * CELL_SIZE,
-                top: portal.y * CELL_SIZE,
-                boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)',
+                backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px)',
+                backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
               }}
             />
-          )}
+
+            {snake.map((segment, index) => (
+              <div
+                key={index}
+                className={`absolute transition-all duration-150 ease-linear ${
+                  index === 0 ? 'z-20' : ''
+                }`}
+                style={{
+                  width: CELL_SIZE - 1,
+                  height: CELL_SIZE - 1,
+                  left: segment.x * CELL_SIZE,
+                  top: segment.y * CELL_SIZE,
+                  opacity: index === 0 ? 1 : 0.8 - index * 0.1,
+                }}
+              >
+                {index === 0 ? (
+                  <>
+                    <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
+                      <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight">
+                        User1
+                      </span>
+                      <svg 
+                        className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5" 
+                        fill="currentColor" 
+                        viewBox="0 0 16 16"
+                      >
+                        <path d="M8 10l-4-4h8l-4 4z"/>
+                      </svg>
+                    </div>
+                    <img
+                      src="/placeholder.svg"
+                      alt="User"
+                      className="w-full h-full rounded-sm object-cover"
+                    />
+                  </>
+                ) : (
+                  <div 
+                    className="w-full h-full bg-gray-800 dark:bg-gray-200 rounded-sm"
+                  />
+                )}
+              </div>
+            ))}
+
+            <div
+              className={`absolute rounded-full snake-food ${food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'}`}
+              style={{
+                width: CELL_SIZE - 2,
+                height: CELL_SIZE - 2,
+                left: food.x * CELL_SIZE,
+                top: food.y * CELL_SIZE,
+              }}
+            />
+
+            {portal && (
+              <div
+                className="absolute bg-blue-500 rounded-full animate-pulse"
+                style={{
+                  width: CELL_SIZE,
+                  height: CELL_SIZE,
+                  left: portal.x * CELL_SIZE,
+                  top: portal.y * CELL_SIZE,
+                  boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)',
+                }}
+              />
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="md:hidden mt-8 relative w-48 h-48">
+      <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-64 h-64">
         <button
-          className="absolute top-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 rounded-lg active:bg-gray-300 border-2 border-gray-300"
+          className="absolute top-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
           onClick={() => handleDirection('UP')}
         >
-          <ArrowUp className="w-6 h-6 text-gray-700" />
+          <ArrowUp className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         </button>
         
         <button
-          className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 rounded-lg active:bg-gray-300 border-2 border-gray-300"
+          className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
           onClick={() => handleDirection('LEFT')}
         >
-          <ArrowLeft className="w-6 h-6 text-gray-700" />
+          <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         </button>
         
         <button
-          className="absolute right-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 rounded-lg active:bg-gray-300 border-2 border-gray-300"
+          className="absolute right-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
           onClick={() => handleDirection('RIGHT')}
         >
-          <ArrowRight className="w-6 h-6 text-gray-700" />
+          <ArrowRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         </button>
         
         <button
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 rounded-lg active:bg-gray-300 border-2 border-gray-300"
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
           onClick={() => handleDirection('DOWN')}
         >
-          <ArrowDown className="w-6 h-6 text-gray-700" />
+          <ArrowDown className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         </button>
 
         <button
           className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${
-            speedBoostPercentage > 0 ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-400'
-          } border-2 border-gray-300`}
+            speedBoostPercentage > 0 
+              ? 'bg-blue-500 text-white' 
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+          } border-2 border-gray-300 dark:border-gray-600`}
           onTouchStart={() => {
             if (speedBoostPercentage > 0) setIsSpeedBoostActive(true);
           }}
@@ -405,12 +404,12 @@ const GameBoard: React.FC = () => {
 
       {gameOver && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 game-over">
-          <div className="bg-white p-8 rounded-lg shadow-xl text-center">
-            <h2 className="text-2xl font-bold mb-4">Game Over</h2>
-            <p className="mb-4">Final Score: {score}</p>
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center">
+            <h2 className="text-2xl font-bold mb-4 dark:text-white">Game Over</h2>
+            <p className="mb-4 dark:text-gray-300">Final Score: {score}</p>
             <button
               onClick={startGame}
-              className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="px-6 py-2 bg-gray-800 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
             >
               Play Again
             </button>
