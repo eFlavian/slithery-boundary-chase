@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 type Position = {
   x: number;
@@ -10,7 +11,7 @@ type Position = {
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type FoodType = 'normal' | 'special';
 
-const GRID_SIZE = 64;
+const GRID_SIZE = 256;
 const CELL_SIZE = 10;
 const INITIAL_SPEED = 150;
 const PORTAL_INTERVAL = 10000;
@@ -18,9 +19,11 @@ const PORTAL_ACTIVE_DURATION = 5000;
 const SPEED_BOOST_INCREMENT = 25;
 const MAX_SPEED_BOOST = 100;
 const SPEED_CONSUMPTION_RATE = 0.5;
+const VISIBLE_AREA_SIZE = 64; // Number of cells visible in viewport
 
 const GameBoard: React.FC = () => {
-  const [snake, setSnake] = useState<Position[]>([{ x: 32, y: 32 }]);
+  const { theme, setTheme } = useTheme();
+  const [snake, setSnake] = useState<Position[]>([{ x: 128, y: 128 }]); // Start in middle of larger map
   const [food, setFood] = useState<Position & { type: FoodType }>({ x: 20, y: 20, type: 'normal' });
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
@@ -201,7 +204,7 @@ const GameBoard: React.FC = () => {
   };
 
   const startGame = () => {
-    setSnake([{ x: 32, y: 32 }]);
+    setSnake([{ x: 128, y: 128 }]);
     setFood(generateFood());
     setDirection('RIGHT');
     setGameOver(false);
@@ -213,6 +216,22 @@ const GameBoard: React.FC = () => {
     if (portalTimeout.current) {
       window.clearTimeout(portalTimeout.current);
     }
+  };
+
+  const createHashPattern = () => {
+    const pattern = (
+      <svg width="20" height="20" xmlns="http://www.w3.org/2000/svg" className="absolute inset-0">
+        <pattern id="hash" width="20" height="20" patternUnits="userSpaceOnUse">
+          <rect width="20" height="20" fill="none"/>
+          <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
+                stroke="#ea384c" 
+                strokeWidth="2" 
+                opacity="0.5"/>
+        </pattern>
+        <rect width="100%" height="100%" fill="url(#hash)"/>
+      </svg>
+    );
+    return pattern;
   };
 
   useEffect(() => {
@@ -245,6 +264,17 @@ const GameBoard: React.FC = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
+      <button
+        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        className="fixed top-4 right-4 p-2 rounded-lg bg-gray-200/80 dark:bg-gray-700/80 border-2 border-gray-300 dark:border-gray-600"
+      >
+        {theme === 'dark' ? (
+          <Sun className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        ) : (
+          <Moon className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        )}
+      </button>
+
       <div className="relative mb-4 text-center w-full max-w-lg">
         <div className="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Score</div>
         <div className="text-4xl font-bold text-gray-800 dark:text-white">{score}</div>
@@ -282,11 +312,15 @@ const GameBoard: React.FC = () => {
               transform: `translate(${-snake[0].x * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px, ${-snake[0].y * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px)`,
             }}
           >
+            {createHashPattern()}
+
             <div
-              className="absolute inset-0"
+              className="absolute"
               style={{
                 backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px)',
                 backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
+                width: '100%',
+                height: '100%',
               }}
             />
 
@@ -307,11 +341,11 @@ const GameBoard: React.FC = () => {
                 {index === 0 ? (
                   <>
                     <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
-                      <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight">
+                      <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight opacity-50">
                         User1
                       </span>
                       <svg 
-                        className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5" 
+                        className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50" 
                         fill="currentColor" 
                         viewBox="0 0 16 16"
                       >
