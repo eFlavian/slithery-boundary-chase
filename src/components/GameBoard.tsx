@@ -11,62 +11,84 @@ type Position = {
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type FoodType = 'normal' | 'special';
 
+type FoodItem = Position & { type: FoodType };
+type Portal = Position;
+
 const GRID_SIZE = 256;
 const CELL_SIZE = 10;
 const INITIAL_SPEED = 150;
-const PORTAL_INTERVAL = 10000;
-const PORTAL_ACTIVE_DURATION = 5000;
+const INITIAL_FOOD_COUNT = 50;
+const INITIAL_PORTAL_COUNT = 2;
+const FOOD_SPAWN_INTERVAL = 5000; // 5 seconds
+const PORTAL_SPAWN_INTERVAL = 20000; // 20 seconds
 const SPEED_BOOST_INCREMENT = 25;
 const MAX_SPEED_BOOST = 100;
 const SPEED_CONSUMPTION_RATE = 0.5;
-const VISIBLE_AREA_SIZE = 64; // Number of cells visible in viewport
+const VISIBLE_AREA_SIZE = 64;
 
 const GameBoard: React.FC = () => {
   const { theme, setTheme } = useTheme();
-  const [snake, setSnake] = useState<Position[]>([{ x: 128, y: 128 }]); // Start in middle of larger map
-  const [food, setFood] = useState<Position & { type: FoodType }>({ x: 20, y: 20, type: 'normal' });
+  const [snake, setSnake] = useState<Position[]>([{ x: 128, y: 128 }]);
+  const [foods, setFoods] = useState<FoodItem[]>([]);
+  const [portals, setPortals] = useState<Portal[]>([]);
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(() => 
     parseInt(localStorage.getItem('snakeHighScore') || '0')
   );
-  const [portal, setPortal] = useState<Position | null>(null);
   const [speedBoostPercentage, setSpeedBoostPercentage] = useState(0);
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
   const gameLoop = useRef<number>();
-  const portalTimeout = useRef<number>();
 
   const generateRandomPosition = (): Position => ({
     x: Math.floor(Math.random() * GRID_SIZE),
     y: Math.floor(Math.random() * GRID_SIZE),
   });
 
-  const generateFood = () => {
-    const newFood = generateRandomPosition();
-    if (snake.some(segment => segment.x === newFood.x && segment.y === newFood.y) ||
-        (portal && portal.x === newFood.x && portal.y === newFood.y)) {
-      return generateFood();
-    }
+  const isPositionOccupied = (pos: Position): boolean => {
+    return (
+      snake.some(segment => segment.x === pos.x && segment.y === pos.y) ||
+      foods.some(food => food.x === pos.x && food.y === pos.y) ||
+      portals.some(portal => portal.x === pos.x && portal.y === pos.y)
+    );
+  };
+
+  const generateFood = (): FoodItem => {
+    let newFood: Position;
+    do {
+      newFood = generateRandomPosition();
+    } while (isPositionOccupied(newFood));
+
     return {
       ...newFood,
-      type: Math.random() < 0.2 ? 'special' : 'normal' as FoodType
+      type: Math.random() < 0.2 ? 'special' : 'normal'
     };
   };
 
-  const generatePortal = () => {
-    if (gameOver || speedBoostPercentage >= MAX_SPEED_BOOST || portal) return;
+  const generatePortal = (): Portal => {
+    let newPortal: Position;
+    do {
+      newPortal = generateRandomPosition();
+    } while (isPositionOccupied(newPortal));
     
-    const newPortal = generateRandomPosition();
-    if (snake.some(segment => segment.x === newPortal.x && segment.y === newPortal.y) ||
-        (food.x === newPortal.x && food.y === newPortal.y)) {
-      return generatePortal();
+    return newPortal;
+  };
+
+  const initializeFoodAndPortals = () => {
+    const initialFoods: FoodItem[] = [];
+    const initialPortals: Portal[] = [];
+
+    for (let i = 0; i < INITIAL_FOOD_COUNT; i++) {
+      initialFoods.push(generateFood());
     }
-    
-    setPortal(newPortal);
-    toast("Speed Portal has appeared!", {
-      duration: 3000,
-    });
+
+    for (let i = 0; i < INITIAL_PORTAL_COUNT; i++) {
+      initialPortals.push(generatePortal());
+    }
+
+    setFoods(initialFoods);
+    setPortals(initialPortals);
   };
 
   const handleDirection = (newDirection: Direction) => {
@@ -143,18 +165,10 @@ const GameBoard: React.FC = () => {
       const newHead = { ...prevSnake[0] };
 
       switch (direction) {
-        case 'UP':
-          newHead.y -= 1;
-          break;
-        case 'DOWN':
-          newHead.y += 1;
-          break;
-        case 'LEFT':
-          newHead.x -= 1;
-          break;
-        case 'RIGHT':
-          newHead.x += 1;
-          break;
+        case 'UP': newHead.y -= 1; break;
+        case 'DOWN': newHead.y += 1; break;
+        case 'LEFT': newHead.x -= 1; break;
+        case 'RIGHT': newHead.x += 1; break;
       }
 
       if (checkCollision(newHead)) {
@@ -169,8 +183,13 @@ const GameBoard: React.FC = () => {
 
       const newSnake = [newHead, ...prevSnake];
       
-      if (portal && newHead.x === portal.x && newHead.y === portal.y) {
-        setPortal(null);
+      // Check portal collision
+      const portalHit = portals.findIndex(portal => 
+        portal.x === newHead.x && portal.y === newHead.y
+      );
+
+      if (portalHit !== -1) {
+        setPortals(prev => prev.filter((_, index) => index !== portalHit));
         const newPercentage = Math.min(speedBoostPercentage + SPEED_BOOST_INCREMENT, MAX_SPEED_BOOST);
         setSpeedBoostPercentage(newPercentage);
         toast(`Speed Boost increased to ${newPercentage}%!`, {
@@ -178,12 +197,18 @@ const GameBoard: React.FC = () => {
         });
       }
 
-      if (newHead.x === food.x && newHead.y === food.y) {
-        const points = food.type === 'special' ? 5 : 1;
+      // Check food collision
+      const foodHit = foods.findIndex(food => 
+        food.x === newHead.x && food.y === newHead.y
+      );
+
+      if (foodHit !== -1) {
+        const eatenFood = foods[foodHit];
+        setFoods(prev => prev.filter((_, index) => index !== foodHit));
+        const points = eatenFood.type === 'special' ? 5 : 1;
         setScore(prev => prev + points);
-        setFood(generateFood());
         
-        if (food.type === 'special') {
+        if (eatenFood.type === 'special') {
           for (let i = 0; i < 4; i++) {
             newSnake.push({ ...newSnake[newSnake.length - 1] });
           }
@@ -205,17 +230,12 @@ const GameBoard: React.FC = () => {
 
   const startGame = () => {
     setSnake([{ x: 128, y: 128 }]);
-    setFood(generateFood());
     setDirection('RIGHT');
     setGameOver(false);
     setScore(0);
     setSpeedBoostPercentage(0);
     setIsSpeedBoostActive(false);
-    setPortal(null);
-    
-    if (portalTimeout.current) {
-      window.clearTimeout(portalTimeout.current);
-    }
+    initializeFoodAndPortals();
   };
 
   const createHashPattern = () => {
@@ -251,16 +271,30 @@ const GameBoard: React.FC = () => {
     }
   }, [gameOver, direction, isSpeedBoostActive]);
 
+  // Food spawn interval
   useEffect(() => {
     if (!gameOver) {
-      const interval = setInterval(() => {
-        if (!portal) {
-          generatePortal();
-        }
-      }, PORTAL_INTERVAL);
-      return () => clearInterval(interval);
+      const foodInterval = setInterval(() => {
+        setFoods(prev => [...prev, generateFood()]);
+      }, FOOD_SPAWN_INTERVAL);
+      return () => clearInterval(foodInterval);
     }
-  }, [gameOver, portal]);
+  }, [gameOver]);
+
+  // Portal spawn interval
+  useEffect(() => {
+    if (!gameOver) {
+      const portalInterval = setInterval(() => {
+        setPortals(prev => [...prev, generatePortal()]);
+      }, PORTAL_SPAWN_INTERVAL);
+      return () => clearInterval(portalInterval);
+    }
+  }, [gameOver]);
+
+  // Initialize game
+  useEffect(() => {
+    startGame();
+  }, []);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
@@ -293,17 +327,14 @@ const GameBoard: React.FC = () => {
         )}
       </div>
 
-      <div 
-        className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
+      <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
         style={{
           width: '100%',
           maxWidth: '90vmin',
           height: '90vmin',
         }}
       >
-        <div 
-          className="relative border-2 border-gray-200 dark:border-gray-700 w-full h-full overflow-hidden"
-        >
+        <div className="relative border-2 border-gray-200 dark:border-gray-700 w-full h-full overflow-hidden">
           <div
             className="absolute transition-all duration-150 ease-linear"
             style={{
@@ -366,18 +397,22 @@ const GameBoard: React.FC = () => {
               </div>
             ))}
 
-            <div
-              className={`absolute rounded-full snake-food ${food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'}`}
-              style={{
-                width: CELL_SIZE - 2,
-                height: CELL_SIZE - 2,
-                left: food.x * CELL_SIZE,
-                top: food.y * CELL_SIZE,
-              }}
-            />
-
-            {portal && (
+            {foods.map((food, index) => (
               <div
+                key={`food-${index}`}
+                className={`absolute rounded-full snake-food ${food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'}`}
+                style={{
+                  width: CELL_SIZE - 2,
+                  height: CELL_SIZE - 2,
+                  left: food.x * CELL_SIZE,
+                  top: food.y * CELL_SIZE,
+                }}
+              />
+            ))}
+
+            {portals.map((portal, index) => (
+              <div
+                key={`portal-${index}`}
                 className="absolute bg-blue-500 rounded-full animate-pulse"
                 style={{
                   width: CELL_SIZE,
@@ -387,7 +422,7 @@ const GameBoard: React.FC = () => {
                   boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)',
                 }}
               />
-            )}
+            ))}
           </div>
         </div>
       </div>
