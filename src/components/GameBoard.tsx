@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play } from 'lucide-react';
@@ -427,7 +426,8 @@ const GameBoard: React.FC = () => {
             .map(player => (
               <div
                 key={player.id}
-                className={`flex justify-between items-center py-1 ${player.id === playerId ? 'text-blue-500 font-semibold' : ''}`}
+                className={`flex justify-between items-center py-1 ${player.id === playerId ? 'text-blue-500 font-semibold' : ''
+                  }`}
               >
                 <span>{player.name}</span>
                 <span>{player.score}</span>
@@ -455,7 +455,8 @@ const GameBoard: React.FC = () => {
       <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="relative w-full h-full">
           {createHashPattern()}
-          <div className="absolute game-container"
+          <div
+            className="absolute game-container"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
@@ -481,13 +482,14 @@ const GameBoard: React.FC = () => {
               player.snake.map((segment: Position, index: number) => (
                 <div
                   key={`${player.id}-${index}`}
-                  className={`absolute will-change-transform ${index === 0 ? 'z-20' : ''}`}
+                  className={`absolute will-change-transform ${index === 0 ? 'z-20' : ''
+                    }`}
                   style={{
                     width: CELL_SIZE - 1,
                     height: CELL_SIZE - 1,
                     left: segment.x * CELL_SIZE,
                     top: segment.y * CELL_SIZE,
-                    opacity: player.isPlaying ? Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1) : 0.3,
+                    opacity: Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
                     transform: 'translate3d(0, 0, 0)',
                     transition: 'all 150ms linear'
                   }}
@@ -516,9 +518,9 @@ const GameBoard: React.FC = () => {
                   {index > 0 && (
                     <div
                       className={`w-full h-full rounded-sm ${player.id === playerId ?
-                        'bg-gray-800 dark:bg-gray-200' :
-                        'bg-red-500 dark:bg-red-400'
-                      }`}
+                          'bg-gray-800 dark:bg-gray-200' :
+                          'bg-red-500 dark:bg-red-400'
+                        }`}
                     />
                   )}
                 </div>
