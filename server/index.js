@@ -1,4 +1,3 @@
-
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -103,17 +102,44 @@ function broadcastGameState() {
 
 function handleCollision(playerId, newHead) {
   const player = gameState.players.get(playerId);
-  if (!player) return false;
+  if (!player) return { collision: false };
 
   // Check wall collision
   if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
-    return true;
+    return { 
+      collision: true, 
+      type: 'suicide',
+      message: `${player.name} committed suicide by hitting the wall`
+    };
   }
 
   // Check self collision
-  return player.snake.slice(4).some(segment => 
+  if (player.snake.slice(4).some(segment => 
     segment.x === newHead.x && segment.y === newHead.y
-  );
+  )) {
+    return { 
+      collision: true, 
+      type: 'suicide',
+      message: `${player.name} committed suicide by eating their own tail`
+    };
+  }
+
+  // Check collision with other players
+  for (let [otherId, otherPlayer] of gameState.players.entries()) {
+    if (otherId !== playerId) {
+      if (otherPlayer.snake.some(segment => 
+        segment.x === newHead.x && segment.y === newHead.y
+      )) {
+        return { 
+          collision: true, 
+          type: 'killed',
+          message: `${player.name} got killed by ${otherPlayer.name}`
+        };
+      }
+    }
+  }
+
+  return { collision: false };
 }
 
 initializeGame();
@@ -172,11 +198,26 @@ wss.on('connection', (ws) => {
           case 'RIGHT': newHead.x += 1; break;
         }
 
-        if (handleCollision(data.playerId, newHead)) {
-          // Game over for this player
+        const collisionResult = handleCollision(data.playerId, newHead);
+        
+        if (collisionResult.collision) {
+          // Broadcast death message to all clients
+          wss.clients.forEach(client => {
+            if (client.readyState === 1) {
+              client.send(JSON.stringify({
+                type: 'playerDeath',
+                data: { message: collisionResult.message }
+              }));
+            }
+          });
+
+          // Send game over to the dead player
           ws.send(JSON.stringify({
             type: 'gameOver',
-            data: { score: player.score }
+            data: { 
+              score: player.score,
+              message: collisionResult.message
+            }
           }));
           return;
         }

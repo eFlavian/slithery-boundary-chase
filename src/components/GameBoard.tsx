@@ -53,9 +53,13 @@ const GameBoard: React.FC = () => {
           setPortals(message.data.portals);
           break;
 
+        case 'playerDeath':
+          toast(message.data.message);
+          break;
+
         case 'gameOver':
           setGameOver(true);
-          toast(`Game Over! Final Score: ${message.data.score}`);
+          toast.error(`Game Over! ${message.data.message}`);
           break;
       }
     };
@@ -187,7 +191,6 @@ const GameBoard: React.FC = () => {
         <div className="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Score</div>
         <div className="text-4xl font-bold text-gray-800 dark:text-white">{score}</div>
         
-        {/* Add leaderboard */}
         <div className="mt-4 bg-white/50 dark:bg-gray-800/50 p-4 rounded-lg">
           <h3 className="text-sm font-semibold mb-2">Leaderboard</h3>
           {players
@@ -235,7 +238,7 @@ const GameBoard: React.FC = () => {
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
               transform: currentPlayer?.snake?.[0] ? 
-                `translate(${-currentPlayer.snake[0].x * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px, ${-currentPlayer.snake[0].y * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px)` :
+                `translate(${-(currentPlayer.snake[0].x * CELL_SIZE - (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2)}px, ${-(currentPlayer.snake[0].y * CELL_SIZE - (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2)}px)` :
                 'translate(0, 0)',
             }}
           >
@@ -251,7 +254,6 @@ const GameBoard: React.FC = () => {
               }}
             />
 
-            {/* Render all players */}
             {players.map(player => (
               player.snake.map((segment: Position, index: number) => (
                 <div
@@ -301,7 +303,6 @@ const GameBoard: React.FC = () => {
               ))
             ))}
 
-            {/* Render food */}
             {foods.map((food, index) => (
               <div
                 key={`food-${index}`}
@@ -315,7 +316,6 @@ const GameBoard: React.FC = () => {
               />
             ))}
 
-            {/* Render portals */}
             {portals.map((portal, index) => (
               <div
                 key={`portal-${index}`}
