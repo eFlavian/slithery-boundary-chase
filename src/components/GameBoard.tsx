@@ -18,6 +18,7 @@ const GRID_SIZE = 256;
 const CELL_SIZE = 15;
 const INITIAL_SPEED = 150;
 const MIN_SNAKE_OPACITY = 0.3;
+const MINIMAP_SIZE = 150;
 
 const GameBoard: React.FC = () => {
   const { theme, setTheme } = useTheme();
@@ -165,6 +166,90 @@ const GameBoard: React.FC = () => {
     );
   };
 
+  const getViewportTransform = (snakeHead: Position) => {
+    const viewportWidth = 90 * Math.min(window.innerWidth, window.innerHeight) / 100;
+    const viewportHeight = viewportWidth;
+    
+    const translateX = -(snakeHead.x * CELL_SIZE - viewportWidth / 2);
+    const translateY = -(snakeHead.y * CELL_SIZE - viewportHeight / 2);
+    
+    return `translate(${translateX}px, ${translateY}px)`;
+  };
+
+  const renderMinimap = () => {
+    const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
+    
+    return (
+      <div className="absolute top-4 right-4 bg-white/90 dark:bg-gray-800/90 rounded-lg p-2 border-2 border-gray-300 dark:border-gray-600 shadow-lg">
+        <div 
+          className="relative"
+          style={{
+            width: MINIMAP_SIZE,
+            height: MINIMAP_SIZE,
+          }}
+        >
+          {currentPlayer?.snake?.[0] && (
+            <div 
+              className="absolute border-2 border-blue-500 pointer-events-none"
+              style={{
+                width: (90 * Math.min(window.innerWidth, window.innerHeight) / 100) * scale,
+                height: (90 * Math.min(window.innerWidth, window.innerHeight) / 100) * scale,
+                left: (currentPlayer.snake[0].x * CELL_SIZE - (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2) * scale + MINIMAP_SIZE / 2,
+                top: (currentPlayer.snake[0].y * CELL_SIZE - (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2) * scale + MINIMAP_SIZE / 2,
+                transform: 'translate(-50%, -50%)',
+              }}
+            />
+          )}
+
+          {players.map(player => (
+            <div
+              key={`minimap-${player.id}`}
+              className={`absolute w-2 h-2 rounded-full ${
+                player.id === playerId ? 'bg-blue-500' : 'bg-red-500'
+              }`}
+              style={{
+                left: (player.snake[0].x * CELL_SIZE * scale),
+                top: (player.snake[0].y * CELL_SIZE * scale),
+              }}
+            />
+          ))}
+
+          {foods.map((food, index) => (
+            <div
+              key={`minimap-food-${index}`}
+              className={`absolute w-1 h-1 rounded-full ${
+                food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'
+              }`}
+              style={{
+                left: (food.x * CELL_SIZE * scale),
+                top: (food.y * CELL_SIZE * scale),
+              }}
+            />
+          ))}
+
+          {portals.map((portal, index) => (
+            <div
+              key={`minimap-portal-${index}`}
+              className="absolute w-1 h-1 rounded-full bg-blue-500"
+              style={{
+                left: (portal.x * CELL_SIZE * scale),
+                top: (portal.y * CELL_SIZE * scale),
+              }}
+            />
+          ))}
+
+          <div 
+            className="absolute border border-gray-300 dark:border-gray-600"
+            style={{
+              width: '100%',
+              height: '100%',
+            }}
+          />
+        </div>
+      </div>
+    );
+  };
+
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -178,7 +263,7 @@ const GameBoard: React.FC = () => {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <button
         onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        className="fixed top-4 right-4 p-2 rounded-lg bg-gray-200/80 dark:bg-gray-700/80 border-2 border-gray-300 dark:border-gray-600"
+        className="fixed top-4 left-4 p-2 rounded-lg bg-gray-200/80 dark:bg-gray-700/80 border-2 border-gray-300 dark:border-gray-600"
       >
         {theme === 'dark' ? (
           <Sun className="w-6 h-6 text-gray-700 dark:text-gray-200" />
@@ -186,6 +271,8 @@ const GameBoard: React.FC = () => {
           <Moon className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         )}
       </button>
+
+      {renderMinimap()}
 
       <div className="relative mb-4 text-center w-full max-w-lg">
         <div className="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Score</div>
@@ -238,7 +325,7 @@ const GameBoard: React.FC = () => {
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
               transform: currentPlayer?.snake?.[0] ? 
-                `translate(${-(currentPlayer.snake[0].x * CELL_SIZE - (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2)}px, ${-(currentPlayer.snake[0].y * CELL_SIZE - (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2)}px)` :
+                getViewportTransform(currentPlayer.snake[0]) :
                 'translate(0, 0)',
             }}
           >
