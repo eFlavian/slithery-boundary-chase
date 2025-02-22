@@ -46,8 +46,6 @@ const GameBoard: React.FC = () => {
   const lastDirection = useRef<Direction>('RIGHT');
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const currentPlayer = players.find(p => p.id === playerId);
-
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
     
@@ -241,6 +239,7 @@ const GameBoard: React.FC = () => {
     }
   }, [gameOver, direction, isSpeedBoostActive, playerId]);
 
+  const currentPlayer = players.find(p => p.id === playerId);
   const score = currentPlayer?.score || 0;
   const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
 
@@ -295,7 +294,7 @@ const GameBoard: React.FC = () => {
                 {isCurrentPlayer ? (
                   <>
                     <div 
-                      className="absolute -translate-x-1/2 -translate-y-1/2 text-[8px] whitespace-nowrap text-blue-500 font-medium"
+                      className="absolute -translate-x-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap text-blue-500 font-medium"
                       style={{
                         left: (player.snake[0].x * CELL_SIZE * scale),
                         top: (player.snake[0].y * CELL_SIZE * scale) - 10,
@@ -335,7 +334,7 @@ const GameBoard: React.FC = () => {
             <div
               key={`minimap-food-${index}`}
               className={`absolute w-1 h-1 rounded-full ${
-                food.type === 'special' ? 'bg-purple-500 w-1 h-1' : 'bg-red-500 w-0.5 h-0.5'
+                food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'
               }`}
               style={{
                 left: (food.x * CELL_SIZE * scale),
@@ -456,7 +455,7 @@ const GameBoard: React.FC = () => {
               className="absolute"
               style={{
                 backgroundColor:'white',
-                backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.1) 1px, transparent 1px)',
+                backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px)',
                 backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
                 width: '100%',
                 height: '100%',
@@ -503,7 +502,7 @@ const GameBoard: React.FC = () => {
                     <div 
                       className={`w-full h-full rounded-sm ${
                         player.id === playerId ? 
-                          'bg-blue-500 dark:bg-blue-100' : 
+                          'bg-gray-800 dark:bg-gray-200' : 
                           'bg-red-500 dark:bg-red-400'
                       }`}
                     />
