@@ -176,11 +176,14 @@ const GameBoard: React.FC = () => {
   };
 
   const getViewportTransform = (snakeHead: Position) => {
-    const viewportWidth = 90 * Math.min(window.innerWidth, window.innerHeight) / 100;
-    const viewportHeight = viewportWidth;
+    const containerWidth = window.innerWidth;
+    const containerHeight = window.innerHeight;
     
-    const translateX = -(snakeHead.x * CELL_SIZE - viewportWidth / 2);
-    const translateY = -(snakeHead.y * CELL_SIZE - viewportHeight / 2);
+    const viewportCenterX = containerWidth / 2;
+    const viewportCenterY = containerHeight / 2;
+    
+    const translateX = viewportCenterX - (snakeHead.x * CELL_SIZE);
+    const translateY = viewportCenterY - (snakeHead.y * CELL_SIZE);
     
     return `translate(${translateX}px, ${translateY}px)`;
   };
@@ -330,17 +333,11 @@ const GameBoard: React.FC = () => {
         </div>
       </div>
 
-      <div className="absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
-        style={{
-          width: '100%',
-          maxWidth: '100%',
-          height: '100%',
-        }}
-      >
-        <div className="relative border-2 border-gray-200 dark:border-gray-700 w-full h-full overflow-hidden">
+      <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
+        <div className="relative w-full h-full">
           {createHashPattern()}
           <div
-            className="absolute transition-all duration-150 ease-linear"
+            className="absolute transition-all duration-75 ease-linear"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
@@ -349,11 +346,10 @@ const GameBoard: React.FC = () => {
                 'translate(0, 0)',
             }}
           >
-            
             <div
               className="absolute"
               style={{
-                backgroundColor:'white',
+                backgroundColor: 'white',
                 backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px)',
                 backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
                 width: '100%',
@@ -365,7 +361,7 @@ const GameBoard: React.FC = () => {
               player.snake.map((segment: Position, index: number) => (
                 <div
                   key={`${player.id}-${index}`}
-                  className={`absolute transition-all duration-150 ease-linear ${
+                  className={`absolute transition-all duration-75 ease-linear ${
                     index === 0 ? 'z-20' : ''
                   }`}
                   style={{
