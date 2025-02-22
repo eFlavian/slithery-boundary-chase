@@ -188,6 +188,22 @@ const GameBoard: React.FC = () => {
     return `translate3d(${translateX}px, ${translateY}px, 0)`;
   };
 
+  // Track the last valid snake position to prevent camera jumps
+  const lastValidPosition = useRef<Position | null>(null);
+
+  const getCameraTransform = () => {
+    if (!currentPlayer?.snake?.[0]) {
+      return 'translate3d(0, 0, 0)';
+    }
+
+    const head = currentPlayer.snake[0];
+    
+    // Update last valid position
+    lastValidPosition.current = head;
+    
+    return getViewportTransform(head);
+  };
+
   const renderMinimap = () => {
     const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
     
@@ -333,7 +349,7 @@ const GameBoard: React.FC = () => {
         </div>
       </div>
 
-      <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden will-change-transform">
+      <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="relative w-full h-full">
           {createHashPattern()}
           <div
@@ -341,9 +357,7 @@ const GameBoard: React.FC = () => {
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
-              transform: currentPlayer?.snake?.[0] ? 
-                getViewportTransform(currentPlayer.snake[0]) :
-                'translate3d(0, 0, 0)',
+              transform: getCameraTransform(),
               transition: 'transform 150ms linear',
               willChange: 'transform'
             }}
