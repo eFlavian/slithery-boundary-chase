@@ -1,4 +1,3 @@
-
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -29,19 +28,16 @@ function generateRandomPosition() {
 }
 
 function isPositionOccupied(pos) {
-  // Check if any player occupies this position
   for (let player of gameState.players.values()) {
     if (player.snake.some(segment => segment.x === pos.x && segment.y === pos.y)) {
       return true;
     }
   }
   
-  // Check if any food occupies this position
   if (gameState.foods.some(food => food.x === pos.x && food.y === pos.y)) {
     return true;
   }
   
-  // Check if any portal occupies this position
   return gameState.portals.some(portal => portal.x === pos.x && portal.y === pos.y);
 }
 
@@ -67,7 +63,6 @@ function generatePortal() {
 }
 
 function initializeGame() {
-  // Initialize foods
   gameState.foods = [];
   for (let i = 0; i < INITIAL_NORMAL_FOOD; i++) {
     gameState.foods.push({ ...generateFood(), type: 'normal' });
@@ -76,7 +71,6 @@ function initializeGame() {
     gameState.foods.push({ ...generateFood(), type: 'special' });
   }
 
-  // Initialize portals
   gameState.portals = [];
   for (let i = 0; i < INITIAL_PORTAL_COUNT; i++) {
     gameState.portals.push(generatePortal());
@@ -105,7 +99,6 @@ function handleCollision(playerId, newHead) {
   const player = gameState.players.get(playerId);
   if (!player) return { collision: false };
 
-  // Check wall collision
   if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
     return { 
       collision: true, 
@@ -114,7 +107,6 @@ function handleCollision(playerId, newHead) {
     };
   }
 
-  // Check self collision // 4 is more pretty (not so harsh)
   if (player.snake.slice(1).some(segment => 
     segment.x === newHead.x && segment.y === newHead.y
   )) {
@@ -125,9 +117,8 @@ function handleCollision(playerId, newHead) {
     };
   }
 
-  // Check collision with other players
   for (let [otherId, otherPlayer] of gameState.players.entries()) {
-    if (otherId !== playerId) {
+    if (otherId !== playerId && otherPlayer.isPlaying) {
       if (otherPlayer.snake.some(segment => 
         segment.x === newHead.x && segment.y === newHead.y
       )) {
@@ -145,13 +136,11 @@ function handleCollision(playerId, newHead) {
 
 initializeGame();
 
-// Spawn new food periodically
 setInterval(() => {
   gameState.foods.push(generateFood());
   broadcastGameState();
 }, FOOD_SPAWN_INTERVAL);
 
-// Spawn new portals periodically
 setInterval(() => {
   gameState.portals.push(generatePortal());
   broadcastGameState();
@@ -160,7 +149,6 @@ setInterval(() => {
 wss.on('connection', (ws) => {
   const playerId = `player${++gameState.playerCount}`;
   
-  // Initialize player with isPlaying flag set to false
   gameState.players.set(playerId, {
     id: playerId,
     name: `Player ${gameState.playerCount}`,
@@ -168,10 +156,9 @@ wss.on('connection', (ws) => {
     direction: 'RIGHT',
     score: 0,
     speedBoostPercentage: 0,
-    isPlaying: false // Player starts as inactive
+    isPlaying: false
   });
 
-  // Send initial player ID
   ws.send(JSON.stringify({
     type: 'init',
     data: { playerId }
@@ -187,20 +174,19 @@ wss.on('connection', (ws) => {
 
     switch (data.type) {
       case 'spawn':
-        // Update player state when they spawn
         player.name = data.playerName;
         player.isPlaying = true;
         broadcastGameState();
         break;
 
       case 'direction':
-        if (player.isPlaying) { // Only update direction if player is active
+        if (player.isPlaying) {
           player.direction = data.direction;
         }
         break;
 
       case 'update':
-        if (!player.isPlaying) return; // Skip updates for inactive players
+        if (!player.isPlaying) return;
 
         const newHead = { ...player.snake[0] };
         
@@ -214,9 +200,8 @@ wss.on('connection', (ws) => {
         const collisionResult = handleCollision(data.playerId, newHead);
         
         if (collisionResult.collision) {
-          player.isPlaying = false; // Set player as inactive when they die
+          player.isPlaying = false;
           
-          // Broadcast death message to all clients
           wss.clients.forEach(client => {
             if (client.readyState === 1) {
               client.send(JSON.stringify({
@@ -229,7 +214,6 @@ wss.on('connection', (ws) => {
             }
           });
 
-          // Send game over to the dead player
           ws.send(JSON.stringify({
             type: 'gameOver',
             data: { 
@@ -242,7 +226,6 @@ wss.on('connection', (ws) => {
 
         const newSnake = [newHead, ...player.snake];
 
-        // Check portal collision
         const portalIndex = gameState.portals.findIndex(portal => 
           portal.x === newHead.x && portal.y === newHead.y
         );
@@ -255,7 +238,6 @@ wss.on('connection', (ws) => {
           );
         }
 
-        // Check food collision
         const foodIndex = gameState.foods.findIndex(food => 
           food.x === newHead.x && food.y === newHead.y
         );
@@ -293,7 +275,6 @@ wss.on('connection', (ws) => {
   });
 });
 
-const PORT = 3001;
-server.listen(PORT, () => {
-  console.log(`WebSocket server is running on ws://localhost:${PORT}`);
+server.listen(3001, () => {
+  console.log('WebSocket server is running on ws://localhost:3001');
 });
