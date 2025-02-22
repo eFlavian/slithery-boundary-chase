@@ -17,7 +17,7 @@ type Portal = Position;
 const GRID_SIZE = 256;
 const CELL_SIZE = 15;
 const INITIAL_SPEED = 150;
-const CAMERA_SMOOTHING = 0.85;
+const CAMERA_SMOOTHING = 0.15;
 const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
 
@@ -35,6 +35,7 @@ const GameBoard: React.FC = () => {
   const lastKeyPress = useRef(0);
   const cameraPositionRef = useRef({ x: 0, y: 0 });
   const animationFrameRef = useRef<number>();
+  const lastUpdateTime = useRef(0);
 
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
@@ -196,15 +197,24 @@ const GameBoard: React.FC = () => {
     const targetX = viewportCenterX - (snakeHead.x * CELL_SIZE);
     const targetY = viewportCenterY - (snakeHead.y * CELL_SIZE);
     
-    cameraPositionRef.current.x += (targetX - cameraPositionRef.current.x) * CAMERA_SMOOTHING;
-    cameraPositionRef.current.y += (targetY - cameraPositionRef.current.y) * CAMERA_SMOOTHING;
+    const now = performance.now();
+    const deltaTime = now - lastUpdateTime.current;
+    lastUpdateTime.current = now;
     
-    return `translate3d(${cameraPositionRef.current.x}px, ${cameraPositionRef.current.y}px, 0)`;
+    const smoothing = Math.min(1, CAMERA_SMOOTHING * (deltaTime / 16.667));
+    
+    cameraPositionRef.current.x += (targetX - cameraPositionRef.current.x) * smoothing;
+    cameraPositionRef.current.y += (targetY - cameraPositionRef.current.y) * smoothing;
+    
+    return `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
   };
 
   const updateCamera = () => {
     if (currentPlayer?.snake?.[0]) {
-      setPlayers(prev => [...prev]);
+      const container = document.querySelector('.game-container');
+      if (container) {
+        container.style.transform = getViewportTransform(currentPlayer.snake[0]);
+      }
     }
     animationFrameRef.current = requestAnimationFrame(updateCamera);
   };
@@ -379,7 +389,7 @@ const GameBoard: React.FC = () => {
         <div className="relative w-full h-full">
           {createHashPattern()}
           <div
-            className="absolute"
+            className="absolute game-container"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
