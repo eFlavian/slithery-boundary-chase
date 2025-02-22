@@ -361,6 +361,10 @@ const GameBoard: React.FC = () => {
     );
   };
 
+  const isActivePlayer = (player: any) => {
+    return player.id !== playerId || (player.id === playerId && isPlaying && !gameOver);
+  };
+
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -489,7 +493,9 @@ const GameBoard: React.FC = () => {
                     height: CELL_SIZE - 1,
                     left: segment.x * CELL_SIZE,
                     top: segment.y * CELL_SIZE,
-                    opacity: player.isPlaying ? (Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1)) : INACTIVE_PLAYER_OPACITY,
+                    opacity: isActivePlayer(player) ? 
+                      Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1) : 
+                      INACTIVE_PLAYER_OPACITY,
                     transform: 'translate3d(0, 0, 0)',
                     transition: 'all 150ms linear'
                   }}
@@ -498,7 +504,7 @@ const GameBoard: React.FC = () => {
                     <>
                       <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
                         <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight opacity-50">
-                          {player.name || `Player ${player.id}`}
+                          {player.name}
                         </span>
                         <svg
                           className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50"
