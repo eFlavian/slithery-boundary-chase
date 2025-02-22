@@ -31,6 +31,7 @@ const GameBoard: React.FC = () => {
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const gameLoop = useRef<number>();
+  const lastKeyPress = useRef(0);
 
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
@@ -74,18 +75,25 @@ const GameBoard: React.FC = () => {
   };
 
   const handleDirection = (newDirection: Direction) => {
-    setDirection(newDirection);
-    wsRef.current?.send(JSON.stringify({
-      type: 'direction',
-      direction: newDirection,
-      playerId
-    }));
+    if (direction !== newDirection) {
+      setDirection(newDirection);
+      wsRef.current?.send(JSON.stringify({
+        type: 'direction',
+        direction: newDirection,
+        playerId
+      }));
+      updateGame();
+    }
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key.startsWith('Arrow')) {
       event.preventDefault();
     }
+
+    const now = Date.now();
+    if (now - lastKeyPress.current < 50) return;
+    lastKeyPress.current = now;
 
     switch (event.key.toLowerCase()) {
       case 'arrowup':
@@ -118,7 +126,7 @@ const GameBoard: React.FC = () => {
   };
 
   const handleKeyUp = (event: KeyboardEvent) => {
-    if (event.key === ' ') { // Spacebar release
+    if (event.key === ' ') {
       setIsSpeedBoostActive(false);
     }
   };
@@ -188,20 +196,11 @@ const GameBoard: React.FC = () => {
     return `translate3d(${translateX}px, ${translateY}px, 0)`;
   };
 
-  // Track the last valid snake position to prevent camera jumps
-  const lastValidPosition = useRef<Position | null>(null);
-
   const getCameraTransform = () => {
     if (!currentPlayer?.snake?.[0]) {
       return 'translate3d(0, 0, 0)';
     }
-
-    const head = currentPlayer.snake[0];
-    
-    // Update last valid position
-    lastValidPosition.current = head;
-    
-    return getViewportTransform(head);
+    return getViewportTransform(currentPlayer.snake[0]);
   };
 
   const renderMinimap = () => {
@@ -358,7 +357,7 @@ const GameBoard: React.FC = () => {
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
               transform: getCameraTransform(),
-              transition: 'transform 150ms linear',
+              transition: 'transform 100ms linear',
               willChange: 'transform'
             }}
           >
@@ -387,7 +386,7 @@ const GameBoard: React.FC = () => {
                     top: segment.y * CELL_SIZE,
                     opacity: Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
                     transform: 'translate3d(0, 0, 0)',
-                    transition: 'all 150ms linear'
+                    transition: 'all 100ms linear'
                   }}
                 >
                   {index === 0 && (
