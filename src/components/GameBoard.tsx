@@ -147,7 +147,7 @@ const GameBoard: React.FC = () => {
       case 'arrowleft':
       case 'a':
         event.preventDefault();
-        if (direction !== 'RIGHT') { 
+        if (direction !== 'RIGHT') {
           handleDirection('LEFT');
         }
         break;
