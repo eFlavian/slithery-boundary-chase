@@ -426,8 +426,7 @@ const GameBoard: React.FC = () => {
             .map(player => (
               <div
                 key={player.id}
-                className={`flex justify-between items-center py-1 ${player.id === playerId ? 'text-blue-500 font-semibold' : ''
-                  }`}
+                className={`flex justify-between items-center py-1 ${player.id === playerId ? 'text-blue-500 font-semibold' : ''}`}
               >
                 <span>{player.name}</span>
                 <span>{player.score}</span>
@@ -482,14 +481,13 @@ const GameBoard: React.FC = () => {
               player.snake.map((segment: Position, index: number) => (
                 <div
                   key={`${player.id}-${index}`}
-                  className={`absolute will-change-transform ${index === 0 ? 'z-20' : ''
-                    }`}
+                  className={`absolute will-change-transform ${index === 0 ? 'z-20' : ''}`}
                   style={{
                     width: CELL_SIZE - 1,
                     height: CELL_SIZE - 1,
                     left: segment.x * CELL_SIZE,
                     top: segment.y * CELL_SIZE,
-                    opacity: Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
+                    opacity: !player.isPlaying ? 0.2 : Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
                     transform: 'translate3d(0, 0, 0)',
                     transition: 'all 150ms linear'
                   }}
@@ -518,9 +516,9 @@ const GameBoard: React.FC = () => {
                   {index > 0 && (
                     <div
                       className={`w-full h-full rounded-sm ${player.id === playerId ?
-                          'bg-gray-800 dark:bg-gray-200' :
-                          'bg-red-500 dark:bg-red-400'
-                        }`}
+                        'bg-gray-800 dark:bg-gray-200' :
+                        'bg-red-500 dark:bg-red-400'
+                      }`}
                     />
                   )}
                 </div>
