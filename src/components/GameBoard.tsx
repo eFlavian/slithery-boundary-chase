@@ -86,21 +86,26 @@ const GameBoard: React.FC = () => {
     switch (event.key.toLowerCase()) {
       case 'arrowup':
       case 'w':
+        event.preventDefault(); // Prevent scrolling
         handleDirection('UP');
         break;
       case 'arrowdown':
       case 's':
+        event.preventDefault(); // Prevent scrolling
         handleDirection('DOWN');
         break;
       case 'arrowleft':
       case 'a':
+        event.preventDefault(); // Prevent scrolling
         handleDirection('LEFT');
         break;
       case 'arrowright':
       case 'd':
+        event.preventDefault(); // Prevent scrolling
         handleDirection('RIGHT');
         break;
       case ' ':
+        event.preventDefault(); // Prevent scrolling
         if (currentPlayer?.speedBoostPercentage > 0) {
           setIsSpeedBoostActive(true);
         }
