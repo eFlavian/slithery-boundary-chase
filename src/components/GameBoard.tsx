@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play } from 'lucide-react';
@@ -454,8 +455,7 @@ const GameBoard: React.FC = () => {
       <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="relative w-full h-full">
           {createHashPattern()}
-          <div
-            className="absolute game-container"
+          <div className="absolute game-container"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
@@ -487,7 +487,7 @@ const GameBoard: React.FC = () => {
                     height: CELL_SIZE - 1,
                     left: segment.x * CELL_SIZE,
                     top: segment.y * CELL_SIZE,
-                    opacity: !player.isPlaying ? 0.2 : Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
+                    opacity: player.isPlaying ? Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1) : 0.3,
                     transform: 'translate3d(0, 0, 0)',
                     transition: 'all 150ms linear'
                   }}
