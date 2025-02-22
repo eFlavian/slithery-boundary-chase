@@ -1,4 +1,3 @@
-
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -7,293 +6,274 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
+const PORT = 3001;
+
 const gameState = {
   players: new Map(),
   foods: [],
-  portals: [],
-  playerCount: 0
+  portals: []
 };
 
 const GRID_SIZE = 256;
-const INITIAL_NORMAL_FOOD = 100;
-const INITIAL_SPECIAL_FOOD = 30;
-const INITIAL_PORTAL_COUNT = 5;
-const FOOD_SPAWN_INTERVAL = 5000;
-const PORTAL_SPAWN_INTERVAL = 20000;
 
-function generateRandomPosition() {
-  return {
-    x: Math.floor(Math.random() * GRID_SIZE),
-    y: Math.floor(Math.random() * GRID_SIZE)
-  };
-}
-
-function isPositionOccupied(pos) {
-  // Check if any player occupies this position
-  for (let player of gameState.players.values()) {
-    if (player.snake.some(segment => segment.x === pos.x && segment.y === pos.y)) {
-      return true;
-    }
-  }
-  
-  // Check if any food occupies this position
-  if (gameState.foods.some(food => food.x === pos.x && food.y === pos.y)) {
-    return true;
-  }
-  
-  // Check if any portal occupies this position
-  return gameState.portals.some(portal => portal.x === pos.x && portal.y === pos.y);
-}
-
-function generateFood() {
-  let newFood;
+const generateFoodPosition = () => {
+  let position;
   do {
-    newFood = generateRandomPosition();
-  } while (isPositionOccupied(newFood));
-
-  return {
-    ...newFood,
-    type: Math.random() < 0.2 ? 'special' : 'normal'
-  };
-}
-
-function generatePortal() {
-  let newPortal;
-  do {
-    newPortal = generateRandomPosition();
-  } while (isPositionOccupied(newPortal));
-  
-  return newPortal;
-}
-
-function initializeGame() {
-  // Initialize foods
-  gameState.foods = [];
-  for (let i = 0; i < INITIAL_NORMAL_FOOD; i++) {
-    gameState.foods.push({ ...generateFood(), type: 'normal' });
-  }
-  for (let i = 0; i < INITIAL_SPECIAL_FOOD; i++) {
-    gameState.foods.push({ ...generateFood(), type: 'special' });
-  }
-
-  // Initialize portals
-  gameState.portals = [];
-  for (let i = 0; i < INITIAL_PORTAL_COUNT; i++) {
-    gameState.portals.push(generatePortal());
-  }
-}
-
-function broadcastGameState() {
-  const playersArray = Array.from(gameState.players.values());
-  const state = {
-    players: playersArray,
-    foods: gameState.foods,
-    portals: gameState.portals
-  };
-
-  wss.clients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(JSON.stringify({
-        type: 'gameState',
-        data: state
-      }));
-    }
-  });
-}
-
-function handleCollision(playerId, newHead) {
-  const player = gameState.players.get(playerId);
-  if (!player) return { collision: false };
-
-  // Check wall collision
-  if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
-    return { 
-      collision: true, 
-      type: 'suicide',
-      message: `${player.name} committed suicide by hitting the wall`
+    position = {
+      x: Math.floor(Math.random() * GRID_SIZE),
+      y: Math.floor(Math.random() * GRID_SIZE)
     };
-  }
+  } while (isCollidingWithSnake(position));
+  return position;
+};
 
-  // Check self collision // 4 is more pretty (not so harsh)
-  if (player.snake.slice(1).some(segment => 
-    segment.x === newHead.x && segment.y === newHead.y
-  )) {
-    return { 
-      collision: true, 
-      type: 'suicide',
-      message: `${player.name} committed suicide by eating their own tail`
-    };
-  }
-
-  // Check collision with other players
-  for (let [otherId, otherPlayer] of gameState.players.entries()) {
-    if (otherId !== playerId) {
-      if (otherPlayer.snake.some(segment => 
-        segment.x === newHead.x && segment.y === newHead.y
-      )) {
-        return { 
-          collision: true, 
-          type: 'killed',
-          message: `${player.name} got killed by ${otherPlayer.name}`
-        };
+const isCollidingWithSnake = (position) => {
+  for (const player of gameState.players.values()) {
+    for (const segment of player.snake) {
+      if (segment.x === position.x && segment.y === position.y) {
+        return true;
       }
     }
   }
+  return false;
+};
 
-  return { collision: false };
-}
+const spawnFood = () => {
+  const foodType = Math.random() < 0.2 ? 'special' : 'normal';
+  const food = {
+    x: generateFoodPosition().x,
+    y: generateFoodPosition().y,
+    type: foodType
+  };
+  gameState.foods.push(food);
+  if (gameState.foods.length > 5) {
+    gameState.foods.shift();
+  }
+};
 
-initializeGame();
+const spawnPortal = () => {
+  let position1, position2;
+  do {
+    position1 = {
+      x: Math.floor(Math.random() * GRID_SIZE),
+      y: Math.floor(Math.random() * GRID_SIZE)
+    };
+    position2 = {
+      x: Math.floor(Math.random() * GRID_SIZE),
+      y: Math.floor(Math.random() * GRID_SIZE)
+    };
+  } while (isCollidingWithSnake(position1) || isCollidingWithSnake(position2));
 
-// Spawn new food periodically
-setInterval(() => {
-  gameState.foods.push(generateFood());
-  broadcastGameState();
-}, FOOD_SPAWN_INTERVAL);
+  gameState.portals = [position1, position2];
+};
 
-// Spawn new portals periodically
-setInterval(() => {
-  gameState.portals.push(generatePortal());
-  broadcastGameState();
-}, PORTAL_SPAWN_INTERVAL);
+setInterval(spawnFood, 3000);
+setInterval(spawnPortal, 10000);
 
-wss.on('connection', (ws) => {
-  const playerId = `player${++gameState.playerCount}`;
-  
-  // Initialize player with isPlaying flag set to false
-  gameState.players.set(playerId, {
-    id: playerId,
-    name: `Player ${gameState.playerCount}`,
-    snake: [{ x: 128, y: 128 }],
-    direction: 'RIGHT',
-    score: 0,
-    speedBoostPercentage: 0,
-    isPlaying: false // Player starts as inactive
-  });
+wss.on('connection', ws => {
+  const playerId = generatePlayerId();
+  console.log('Client connected', playerId);
+  ws.playerId = playerId;
 
-  // Send initial player ID
   ws.send(JSON.stringify({
     type: 'init',
     data: { playerId }
   }));
 
-  broadcastGameState();
+  gameState.players.set(playerId, {
+    id: playerId,
+    name: 'Player',
+    snake: [{ x: 128, y: 128 }],
+    direction: 'RIGHT',
+    score: 0,
+    speedBoostPercentage: 100,
+    isPlaying: false
+  });
 
-  ws.on('message', (message) => {
-    const data = JSON.parse(message);
-    const player = gameState.players.get(data.playerId);
+  ws.on('message', message => {
+    try {
+      const parsedMessage = JSON.parse(message.toString());
 
-    if (!player) return;
+      switch (parsedMessage.type) {
+        case 'spawn':
+          const playerName = parsedMessage.playerName;
+          gameState.players.set(playerId, {
+            id: playerId,
+            name: playerName,
+            snake: [{ x: 128, y: 128 }],
+            direction: 'RIGHT',
+            score: 0,
+            speedBoostPercentage: 100,
+            isPlaying: true
+          });
+          break;
 
-    switch (data.type) {
-      case 'spawn':
-        // Update player state when they spawn
-        player.name = data.playerName;
-        player.isPlaying = true;
-        broadcastGameState();
-        break;
+        case 'direction':
+          const direction = parsedMessage.direction;
+          gameState.players.set(playerId, {
+            ...gameState.players.get(playerId),
+            direction: direction
+          });
+          break;
 
-      case 'direction':
-        if (player.isPlaying) { // Only update direction if player is active
-          player.direction = data.direction;
-        }
-        break;
+        case 'update':
+          if (!gameState.players.get(playerId).isPlaying) return;
+          const player = gameState.players.get(playerId);
+          const newHead = getNewHeadPosition(player);
+          const collisionResult = handleCollision(playerId, newHead);
 
-      case 'update':
-        if (!player.isPlaying) return; // Skip updates for inactive players
-
-        const newHead = { ...player.snake[0] };
-        
-        switch (player.direction) {
-          case 'UP': newHead.y -= 1; break;
-          case 'DOWN': newHead.y += 1; break;
-          case 'LEFT': newHead.x -= 1; break;
-          case 'RIGHT': newHead.x += 1; break;
-        }
-
-        const collisionResult = handleCollision(data.playerId, newHead);
-        
-        if (collisionResult.collision) {
-          player.isPlaying = false; // Set player as inactive when they die
-          
-          // Broadcast death message to all clients
-          wss.clients.forEach(client => {
-            if (client.readyState === 1) {
+          if (collisionResult.collision) {
+            gameState.players.set(playerId, {
+              ...gameState.players.get(playerId),
+              isPlaying: false
+            });
+            
+            wss.clients.forEach(client => {
               client.send(JSON.stringify({
                 type: 'playerDeath',
-                data: { 
-                  message: collisionResult.message,
-                  playerId: data.playerId
-                }
+                data: { message: `${player.name} died!` }
               }));
-            }
-          });
+            });
 
-          // Send game over to the dead player
-          ws.send(JSON.stringify({
-            type: 'gameOver',
-            data: { 
-              score: player.score,
-              message: collisionResult.message
-            }
-          }));
-          return;
-        }
-
-        const newSnake = [newHead, ...player.snake];
-
-        // Check portal collision
-        const portalIndex = gameState.portals.findIndex(portal => 
-          portal.x === newHead.x && portal.y === newHead.y
-        );
-
-        if (portalIndex !== -1) {
-          gameState.portals.splice(portalIndex, 1);
-          player.speedBoostPercentage = Math.min(
-            player.speedBoostPercentage + 25, 
-            100
-          );
-        }
-
-        // Check food collision
-        const foodIndex = gameState.foods.findIndex(food => 
-          food.x === newHead.x && food.y === newHead.y
-        );
-
-        if (foodIndex !== -1) {
-          const food = gameState.foods[foodIndex];
-          gameState.foods.splice(foodIndex, 1);
-          player.score += food.type === 'special' ? 5 : 1;
-          
-          if (food.type === 'special') {
-            for (let i = 0; i < 4; i++) {
-              newSnake.push({ ...newSnake[newSnake.length - 1] });
-            }
+            ws.send(JSON.stringify({
+              type: 'gameOver',
+              data: { message: collisionResult.message }
+            }));
+            return;
           }
-        } else {
-          newSnake.pop();
-        }
 
-        player.snake = newSnake;
-        break;
+          const ateFood = collisionResult.ate;
 
-      case 'speedBoost':
-        if (player.isPlaying) {
-          player.speedBoostPercentage = Math.max(0, player.speedBoostPercentage - 0.5);
-        }
-        break;
+          player.snake.unshift(newHead);
+          if (!ateFood) {
+            player.snake.pop();
+          }
+
+          gameState.players.set(playerId, player);
+          break;
+
+        case 'speedBoost':
+          const playerBoost = gameState.players.get(playerId);
+          if (playerBoost.speedBoostPercentage > 0) {
+            playerBoost.speedBoostPercentage = Math.max(0, playerBoost.speedBoostPercentage - 1);
+            gameState.players.set(playerId, playerBoost);
+          }
+          break;
+      }
+    } catch (error) {
+      console.error("Failed to parse message from client", error);
     }
-
-    broadcastGameState();
   });
 
   ws.on('close', () => {
+    console.log('Client disconnected', playerId);
     gameState.players.delete(playerId);
-    broadcastGameState();
   });
 });
 
-const PORT = 3001;
+function getNewHeadPosition(player) {
+  const currentHead = player.snake[0];
+  let newHead = { x: currentHead.x, y: currentHead.y };
+
+  switch (player.direction) {
+    case 'UP':
+      newHead.y = (currentHead.y - 1 + GRID_SIZE) % GRID_SIZE;
+      break;
+    case 'DOWN':
+      newHead.y = (currentHead.y + 1) % GRID_SIZE;
+      break;
+    case 'LEFT':
+      newHead.x = (currentHead.x - 1 + GRID_SIZE) % GRID_SIZE;
+      break;
+    case 'RIGHT':
+      newHead.x = (currentHead.x + 1) % GRID_SIZE;
+      break;
+  }
+
+  if (gameState.portals.length === 2) {
+    const [portal1, portal2] = gameState.portals;
+    if (newHead.x === portal1.x && newHead.y === portal1.y) {
+      newHead = portal2;
+    } else if (newHead.x === portal2.x && newHead.y === portal2.y) {
+      newHead = portal1;
+    }
+  }
+
+  return newHead;
+}
+
+const handleCollision = (playerId, newHead) => {
+  const player = gameState.players.get(playerId);
+  
+  // Check wall collision
+  if (newHead.x < 0 || newHead.x >= 256 || newHead.y < 0 || newHead.y >= 256) {
+    return {
+      collision: true,
+      message: `${player.name} hit a wall!`
+    };
+  }
+
+  // Check collision with other snakes
+  for (const [otherPlayerId, otherPlayer] of gameState.players) {
+    // Skip if it's the same player or if the other player is inactive
+    if (otherPlayerId === playerId || !otherPlayer.isPlaying) continue;
+
+    // Check collision with other snake's body
+    for (const segment of otherPlayer.snake) {
+      if (newHead.x === segment.x && newHead.y === segment.y) {
+        return {
+          collision: true,
+          message: `${player.name} collided with ${otherPlayer.name}!`
+        };
+      }
+    }
+  }
+
+  // Check self-collision
+  for (let i = 0; i < player.snake.length; i++) {
+    if (newHead.x === player.snake[i].x && newHead.y === player.snake[i].y) {
+      return {
+        collision: true,
+        message: `${player.name} collided with themselves!`
+      };
+    }
+  }
+
+  // Check food collision and handle accordingly
+  for (let i = 0; i < gameState.foods.length; i++) {
+    if (newHead.x === gameState.foods[i].x && newHead.y === gameState.foods[i].y) {
+      player.score += gameState.foods[i].type === 'special' ? 5 : 1;
+      if (gameState.foods[i].type === 'special') {
+        player.speedBoostPercentage = Math.min(100, player.speedBoostPercentage + 25);
+      }
+      gameState.foods.splice(i, 1);
+      spawnFood();
+      return { collision: false, ate: true };
+    }
+  }
+
+  return { collision: false, ate: false };
+};
+
+function generatePlayerId() {
+  return Math.random().toString(36).substring(2, 15);
+}
+
+setInterval(() => {
+  const gameStateData = {
+    players: Array.from(gameState.players.values()),
+    foods: gameState.foods,
+    portals: gameState.portals
+  };
+
+  wss.clients.forEach(client => {
+    client.send(JSON.stringify({
+      type: 'gameState',
+      data: gameStateData
+    }));
+  });
+}, 50);
+
 server.listen(PORT, () => {
-  console.log(`WebSocket server is running on ws://localhost:${PORT}`);
+  console.log(`Server started on port ${PORT}`);
 });
