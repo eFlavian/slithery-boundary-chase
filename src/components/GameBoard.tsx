@@ -103,32 +103,42 @@ const GameBoard: React.FC = () => {
   };
 
   const handleDirection = (newDirection: Direction) => {
-    setDirection(newDirection);
-    wsRef.current?.send(JSON.stringify({
-      type: 'direction',
-      direction: newDirection,
-      playerId
-    }));
+    // Only update direction if it's different
+    if (direction !== newDirection) {
+      setDirection(newDirection);
+      wsRef.current?.send(JSON.stringify({
+        type: 'direction',
+        direction: newDirection,
+        playerId
+      }));
+    }
   };
 
   const processMovement = () => {
     const now = performance.now();
-    const moveDelay = 50; // Minimum delay between movements (ms)
+    const moveDelay = 16; // Approximately 60fps for smoother movement
 
     if (now - lastMovementTime.current < moveDelay) {
       return;
     }
 
-    if (keyStates.current['w'] || keyStates.current['arrowup']) {
+    // Process diagonal movements
+    const up = keyStates.current['w'] || keyStates.current['arrowup'];
+    const down = keyStates.current['s'] || keyStates.current['arrowdown'];
+    const left = keyStates.current['a'] || keyStates.current['arrowleft'];
+    const right = keyStates.current['d'] || keyStates.current['arrowright'];
+
+    // Priority-based direction handling
+    if (up && !down) {
       handleDirection('UP');
     }
-    if (keyStates.current['s'] || keyStates.current['arrowdown']) {
+    if (down && !up) {
       handleDirection('DOWN');
     }
-    if (keyStates.current['a'] || keyStates.current['arrowleft']) {
+    if (left && !right) {
       handleDirection('LEFT');
     }
-    if (keyStates.current['d'] || keyStates.current['arrowright']) {
+    if (right && !left) {
       handleDirection('RIGHT');
     }
 
@@ -168,6 +178,9 @@ const GameBoard: React.FC = () => {
         playerId
       }));
     }
+
+    // Process movement on each game update
+    processMovement();
   };
 
   useEffect(() => {
@@ -177,7 +190,7 @@ const GameBoard: React.FC = () => {
 
   useEffect(() => {
     if (!gameOver && playerId) {
-      const speed = isSpeedBoostActive ? INITIAL_SPEED / 2 : INITIAL_SPEED;
+      const speed = 16; // Run at ~60fps for smooth updates
       gameLoop.current = window.setInterval(updateGame, speed);
       return () => clearInterval(gameLoop.current);
     }
@@ -344,7 +357,7 @@ const GameBoard: React.FC = () => {
               transform: currentPlayer?.snake?.[0] ? 
                 getViewportTransform(currentPlayer.snake[0]) :
                 'translate(0, 0)',
-              transition: 'transform 100ms linear',
+              transition: 'transform 16ms linear', // Matching the update rate for smooth movement
             }}
           >
             
@@ -363,7 +376,7 @@ const GameBoard: React.FC = () => {
               player.snake.map((segment: Position, index: number) => (
                 <div
                   key={`${player.id}-${index}`}
-                  className={`absolute transition-all duration-150 ease-linear ${
+                  className={`absolute transition-all duration-[16ms] ease-linear ${
                     index === 0 ? 'z-20' : ''
                   }`}
                   style={{
