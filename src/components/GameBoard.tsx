@@ -49,18 +49,12 @@ const GameBoard: React.FC = () => {
           break;
 
         case 'gameState':
-          const updatedPlayers = message.data.players.filter((p: any) => 
-            !(p.id === playerId && gameOver)
-          );
-          setPlayers(updatedPlayers);
+          setPlayers(message.data.players);
           setFoods(message.data.foods);
           setPortals(message.data.portals);
           break;
 
         case 'playerDeath':
-          if (message.data.playerId === playerId) {
-            setGameOver(true);
-          }
           toast(message.data.message);
           break;
 
@@ -77,19 +71,6 @@ const GameBoard: React.FC = () => {
     };
 
     wsRef.current = ws;
-  };
-
-  const getViewportTransform = (snakeHead: Position) => {
-    const viewportWidth = 90 * Math.min(window.innerWidth, window.innerHeight) / 100;
-    const viewportHeight = viewportWidth;
-    
-    const centerX = viewportWidth / 2;
-    const centerY = viewportHeight / 2;
-    
-    const translateX = centerX - (snakeHead.x * CELL_SIZE);
-    const translateY = centerY - (snakeHead.y * CELL_SIZE);
-    
-    return `translate(${translateX}px, ${translateY}px)`;
   };
 
   const handleDirection = (newDirection: Direction) => {
@@ -177,61 +158,31 @@ const GameBoard: React.FC = () => {
 
   const createHashPattern = () => {
     return (
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute inset-0 w-[15px] h-full left-0" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="hash-left" width="20" height="20" patternUnits="userSpaceOnUse">
-                <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
-                      stroke="#1e1e1e" 
-                      strokeWidth="2" 
-                      opacity="0.5"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#hash-left)"/>
-          </svg>
-        </div>
-        <div className="absolute inset-0 w-[15px] h-full right-0" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="hash-right" width="20" height="20" patternUnits="userSpaceOnUse">
-                <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
-                      stroke="#1e1e1e" 
-                      strokeWidth="2" 
-                      opacity="0.5"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#hash-right)"/>
-          </svg>
-        </div>
-        <div className="absolute inset-0 w-full h-[15px] top-0" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="hash-top" width="20" height="20" patternUnits="userSpaceOnUse">
-                <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
-                      stroke="#1e1e1e" 
-                      strokeWidth="2" 
-                      opacity="0.5"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#hash-top)"/>
-          </svg>
-        </div>
-        <div className="absolute inset-0 w-full h-[15px] bottom-0" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="hash-bottom" width="20" height="20" patternUnits="userSpaceOnUse">
-                <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
-                      stroke="#1e1e1e" 
-                      strokeWidth="2" 
-                      opacity="0.5"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#hash-bottom)"/>
-          </svg>
-        </div>
+      <div className="absolute inset-0 w-full h-full" style={{ backgroundColor:'rgba(30,30,30,0.2)' }}>
+        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="hash" width="20" height="20" patternUnits="userSpaceOnUse">
+              <rect width="20" height="20" fill="none"/>
+              <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
+                    stroke="#1e1e1e" 
+                    strokeWidth="2" 
+                    opacity="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#hash)"/>
+        </svg>
       </div>
     );
+  };
+
+  const getViewportTransform = (snakeHead: Position) => {
+    const viewportWidth = 90 * Math.min(window.innerWidth, window.innerHeight) / 100;
+    const viewportHeight = viewportWidth;
+    
+    const translateX = -(snakeHead.x * CELL_SIZE - viewportWidth / 2);
+    const translateY = -(snakeHead.y * CELL_SIZE - viewportHeight / 2);
+    
+    return `translate(${translateX}px, ${translateY}px)`;
   };
 
   const renderMinimap = () => {
@@ -389,7 +340,7 @@ const GameBoard: React.FC = () => {
         <div className="relative border-2 border-gray-200 dark:border-gray-700 w-full h-full overflow-hidden">
           {createHashPattern()}
           <div
-            className="absolute transition-transform duration-150 ease-linear"
+            className="absolute transition-all duration-150 ease-linear"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
@@ -398,57 +349,67 @@ const GameBoard: React.FC = () => {
                 'translate(0, 0)',
             }}
           >
-            {players
-              .filter(player => !(player.id === playerId && gameOver))
-              .map(player => (
-                player.snake.map((segment: Position, index: number) => (
-                  <div
-                    key={`${player.id}-${index}`}
-                    className={`absolute transition-all duration-150 ease-linear ${
-                      index === 0 ? 'z-20' : ''
-                    }`}
-                    style={{
-                      width: CELL_SIZE - 1,
-                      height: CELL_SIZE - 1,
-                      left: segment.x * CELL_SIZE,
-                      top: segment.y * CELL_SIZE,
-                      opacity: Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
-                    }}
-                  >
-                    {index === 0 && (
-                      <>
-                        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
-                          <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight opacity-50">
-                            {player.name}
-                          </span>
-                          <svg 
-                            className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50" 
-                            fill="currentColor" 
-                            viewBox="0 0 16 16"
-                          >
-                            <path d="M8 10l-4-4h8l-4 4z"/>
-                          </svg>
-                        </div>
-                        <img
-                          src="/defaultPic.webp"
-                          alt="User"
-                          className="w-full h-full rounded-sm object-cover"
-                        />
-                      </>
-                    )}
-                    {index > 0 && (
-                      <div 
-                        className={`w-full h-full rounded-sm ${
-                          player.id === playerId ? 
-                            'bg-gray-800 dark:bg-gray-200' : 
-                            'bg-red-500 dark:bg-red-400'
-                        }`}
-                      />
-                    )}
-                  </div>
-                ))
-              ))}
             
+            <div
+              className="absolute"
+              style={{
+                backgroundColor:'white',
+                backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px)',
+                backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
+                width: '100%',
+                height: '100%',
+              }}
+            />
+
+            {players.map(player => (
+              player.snake.map((segment: Position, index: number) => (
+                <div
+                  key={`${player.id}-${index}`}
+                  className={`absolute transition-all duration-150 ease-linear ${
+                    index === 0 ? 'z-20' : ''
+                  }`}
+                  style={{
+                    width: CELL_SIZE - 1,
+                    height: CELL_SIZE - 1,
+                    left: segment.x * CELL_SIZE,
+                    top: segment.y * CELL_SIZE,
+                    opacity: Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
+                  }}
+                >
+                  {index === 0 && (
+                    <>
+                      <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
+                        <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight opacity-50">
+                          {player.name}
+                        </span>
+                        <svg 
+                          className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50" 
+                          fill="currentColor" 
+                          viewBox="0 0 16 16"
+                        >
+                          <path d="M8 10l-4-4h8l-4 4z"/>
+                        </svg>
+                      </div>
+                      <img
+                        src="/defaultPic.webp"
+                        alt="User"
+                        className="w-full h-full rounded-sm object-cover"
+                      />
+                    </>
+                  )}
+                  {index > 0 && (
+                    <div 
+                      className={`w-full h-full rounded-sm ${
+                        player.id === playerId ? 
+                          'bg-gray-800 dark:bg-gray-200' : 
+                          'bg-red-500 dark:bg-red-400'
+                      }`}
+                    />
+                  )}
+                </div>
+              ))
+            ))}
+
             {foods.map((food, index) => (
               <div
                 key={`food-${index}`}
