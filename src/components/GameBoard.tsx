@@ -116,13 +116,12 @@ const GameBoard: React.FC = () => {
 
   const processMovement = () => {
     const now = performance.now();
-    const moveDelay = 16; // Approximately 60fps for smoother movement
+    const moveDelay = 32; // Smoother movement but not too fast
 
     if (now - lastMovementTime.current < moveDelay) {
       return;
     }
 
-    // Process diagonal movements
     const up = keyStates.current['w'] || keyStates.current['arrowup'];
     const down = keyStates.current['s'] || keyStates.current['arrowdown'];
     const left = keyStates.current['a'] || keyStates.current['arrowleft'];
@@ -190,7 +189,7 @@ const GameBoard: React.FC = () => {
 
   useEffect(() => {
     if (!gameOver && playerId) {
-      const speed = 16; // Run at ~60fps for smooth updates
+      const speed = isSpeedBoostActive ? INITIAL_SPEED / 2 : INITIAL_SPEED;
       gameLoop.current = window.setInterval(updateGame, speed);
       return () => clearInterval(gameLoop.current);
     }
@@ -357,7 +356,7 @@ const GameBoard: React.FC = () => {
               transform: currentPlayer?.snake?.[0] ? 
                 getViewportTransform(currentPlayer.snake[0]) :
                 'translate(0, 0)',
-              transition: 'transform 16ms linear', // Matching the update rate for smooth movement
+              transition: 'transform 150ms ease-out',
             }}
           >
             
@@ -376,7 +375,7 @@ const GameBoard: React.FC = () => {
               player.snake.map((segment: Position, index: number) => (
                 <div
                   key={`${player.id}-${index}`}
-                  className={`absolute transition-all duration-[16ms] ease-linear ${
+                  className={`absolute transition-all duration-150 ease-out ${
                     index === 0 ? 'z-20' : ''
                   }`}
                   style={{
