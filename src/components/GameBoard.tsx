@@ -17,6 +17,7 @@ type Portal = Position;
 const GRID_SIZE = 256;
 const CELL_SIZE = 15;
 const INITIAL_SPEED = 150;
+const CAMERA_SMOOTHING = 0.85;
 const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
 
@@ -32,6 +33,8 @@ const GameBoard: React.FC = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
+  const cameraPositionRef = useRef({ x: 0, y: 0 });
+  const animationFrameRef = useRef<number>();
 
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
@@ -190,18 +193,42 @@ const GameBoard: React.FC = () => {
     const viewportCenterX = containerWidth / 2;
     const viewportCenterY = containerHeight / 2;
     
-    const translateX = viewportCenterX - (snakeHead.x * CELL_SIZE);
-    const translateY = viewportCenterY - (snakeHead.y * CELL_SIZE);
+    const targetX = viewportCenterX - (snakeHead.x * CELL_SIZE);
+    const targetY = viewportCenterY - (snakeHead.y * CELL_SIZE);
     
-    return `translate3d(${translateX}px, ${translateY}px, 0)`;
+    cameraPositionRef.current.x += (targetX - cameraPositionRef.current.x) * CAMERA_SMOOTHING;
+    cameraPositionRef.current.y += (targetY - cameraPositionRef.current.y) * CAMERA_SMOOTHING;
+    
+    return `translate3d(${cameraPositionRef.current.x}px, ${cameraPositionRef.current.y}px, 0)`;
   };
 
-  const getCameraTransform = () => {
-    if (!currentPlayer?.snake?.[0]) {
-      return 'translate3d(0, 0, 0)';
+  const updateCamera = () => {
+    if (currentPlayer?.snake?.[0]) {
+      setPlayers(prev => [...prev]);
     }
-    return getViewportTransform(currentPlayer.snake[0]);
+    animationFrameRef.current = requestAnimationFrame(updateCamera);
   };
+
+  useEffect(() => {
+    updateCamera();
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (currentPlayer?.snake?.[0]) {
+      const containerWidth = window.innerWidth;
+      const containerHeight = window.innerHeight;
+      
+      cameraPositionRef.current = {
+        x: containerWidth / 2 - (currentPlayer.snake[0].x * CELL_SIZE),
+        y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
+      };
+    }
+  }, [playerId]);
 
   const renderMinimap = () => {
     const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
@@ -356,8 +383,9 @@ const GameBoard: React.FC = () => {
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
-              transform: getCameraTransform(),
-              transition: 'transform 150ms linear',
+              transform: currentPlayer?.snake?.[0] ? 
+                getViewportTransform(currentPlayer.snake[0]) : 
+                'translate3d(0, 0, 0)',
               willChange: 'transform'
             }}
           >
