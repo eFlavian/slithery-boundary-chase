@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play } from 'lucide-react';
@@ -21,6 +20,7 @@ const INITIAL_SPEED = 140;
 const CAMERA_SMOOTHING = 0.55;
 const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
+const INACTIVE_PLAYER_OPACITY = 0.2;
 
 const GameBoard: React.FC = () => {
   const { theme, setTheme } = useTheme();
@@ -427,7 +427,8 @@ const GameBoard: React.FC = () => {
             .map(player => (
               <div
                 key={player.id}
-                className={`flex justify-between items-center py-1 ${player.id === playerId ? 'text-blue-500 font-semibold' : ''}`}
+                className={`flex justify-between items-center py-1 ${player.id === playerId ? 'text-blue-500 font-semibold' : ''
+                  }`}
               >
                 <span>{player.name}</span>
                 <span>{player.score}</span>
@@ -455,7 +456,8 @@ const GameBoard: React.FC = () => {
       <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="relative w-full h-full">
           {createHashPattern()}
-          <div className="absolute game-container"
+          <div
+            className="absolute game-container"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
@@ -487,7 +489,7 @@ const GameBoard: React.FC = () => {
                     height: CELL_SIZE - 1,
                     left: segment.x * CELL_SIZE,
                     top: segment.y * CELL_SIZE,
-                    opacity: player.isPlaying ? Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1) : 0.3,
+                    opacity: player.isPlaying ? (Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1)) : INACTIVE_PLAYER_OPACITY,
                     transform: 'translate3d(0, 0, 0)',
                     transition: 'all 150ms linear'
                   }}
@@ -496,7 +498,7 @@ const GameBoard: React.FC = () => {
                     <>
                       <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
                         <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight opacity-50">
-                          {player.name}
+                          {player.name || `Player ${player.id}`}
                         </span>
                         <svg
                           className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50"
