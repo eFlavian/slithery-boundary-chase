@@ -46,6 +46,8 @@ const GameBoard: React.FC = () => {
   const lastDirection = useRef<Direction>('RIGHT');
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const currentPlayer = players.find(p => p.id === playerId);
+
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
     
@@ -239,7 +241,6 @@ const GameBoard: React.FC = () => {
     }
   }, [gameOver, direction, isSpeedBoostActive, playerId]);
 
-  const currentPlayer = players.find(p => p.id === playerId);
   const score = currentPlayer?.score || 0;
   const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
 
