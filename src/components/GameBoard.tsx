@@ -357,7 +357,7 @@ const GameBoard: React.FC = () => {
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
               transform: getCameraTransform(),
-              transition: 'transform 100ms linear',
+              transition: 'transform 150ms linear',
               willChange: 'transform'
             }}
           >
@@ -386,7 +386,7 @@ const GameBoard: React.FC = () => {
                     top: segment.y * CELL_SIZE,
                     opacity: Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
                     transform: 'translate3d(0, 0, 0)',
-                    transition: 'all 100ms linear'
+                    transition: 'all 150ms linear'
                   }}
                 >
                   {index === 0 && (
