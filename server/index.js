@@ -1,3 +1,4 @@
+
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -159,14 +160,15 @@ setInterval(() => {
 wss.on('connection', (ws) => {
   const playerId = `player${++gameState.playerCount}`;
   
-  // Initialize player
+  // Initialize player with isPlaying flag set to false
   gameState.players.set(playerId, {
     id: playerId,
     name: `Player ${gameState.playerCount}`,
     snake: [{ x: 128, y: 128 }],
     direction: 'RIGHT',
     score: 0,
-    speedBoostPercentage: 0
+    speedBoostPercentage: 0,
+    isPlaying: false // Player starts as inactive
   });
 
   // Send initial player ID
@@ -184,11 +186,22 @@ wss.on('connection', (ws) => {
     if (!player) return;
 
     switch (data.type) {
+      case 'spawn':
+        // Update player state when they spawn
+        player.name = data.playerName;
+        player.isPlaying = true;
+        broadcastGameState();
+        break;
+
       case 'direction':
-        player.direction = data.direction;
+        if (player.isPlaying) { // Only update direction if player is active
+          player.direction = data.direction;
+        }
         break;
 
       case 'update':
+        if (!player.isPlaying) return; // Skip updates for inactive players
+
         const newHead = { ...player.snake[0] };
         
         switch (player.direction) {
@@ -201,12 +214,17 @@ wss.on('connection', (ws) => {
         const collisionResult = handleCollision(data.playerId, newHead);
         
         if (collisionResult.collision) {
+          player.isPlaying = false; // Set player as inactive when they die
+          
           // Broadcast death message to all clients
           wss.clients.forEach(client => {
             if (client.readyState === 1) {
               client.send(JSON.stringify({
                 type: 'playerDeath',
-                data: { message: collisionResult.message }
+                data: { 
+                  message: collisionResult.message,
+                  playerId: data.playerId
+                }
               }));
             }
           });
@@ -260,7 +278,9 @@ wss.on('connection', (ws) => {
         break;
 
       case 'speedBoost':
-        player.speedBoostPercentage = Math.max(0, player.speedBoostPercentage - 0.5);
+        if (player.isPlaying) {
+          player.speedBoostPercentage = Math.max(0, player.speedBoostPercentage - 0.5);
+        }
         break;
     }
 

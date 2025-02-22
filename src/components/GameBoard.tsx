@@ -493,7 +493,7 @@ const GameBoard: React.FC = () => {
                     height: CELL_SIZE - 1,
                     left: segment.x * CELL_SIZE,
                     top: segment.y * CELL_SIZE,
-                    opacity: isActivePlayer(player) ? 
+                    opacity: player.isPlaying ? 
                       Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1) : 
                       INACTIVE_PLAYER_OPACITY,
                     transform: 'translate3d(0, 0, 0)',
