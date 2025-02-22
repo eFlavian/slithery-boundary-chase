@@ -185,7 +185,7 @@ const GameBoard: React.FC = () => {
     const translateX = viewportCenterX - (snakeHead.x * CELL_SIZE);
     const translateY = viewportCenterY - (snakeHead.y * CELL_SIZE);
     
-    return `translate(${translateX}px, ${translateY}px)`;
+    return `translate3d(${translateX}px, ${translateY}px, 0)`;
   };
 
   const renderMinimap = () => {
@@ -333,17 +333,19 @@ const GameBoard: React.FC = () => {
         </div>
       </div>
 
-      <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
+      <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden will-change-transform">
         <div className="relative w-full h-full">
           {createHashPattern()}
           <div
-            className="absolute transition-all duration-75 ease-linear"
+            className="absolute"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
               transform: currentPlayer?.snake?.[0] ? 
                 getViewportTransform(currentPlayer.snake[0]) :
-                'translate(0, 0)',
+                'translate3d(0, 0, 0)',
+              transition: 'transform 150ms linear',
+              willChange: 'transform'
             }}
           >
             <div
@@ -361,7 +363,7 @@ const GameBoard: React.FC = () => {
               player.snake.map((segment: Position, index: number) => (
                 <div
                   key={`${player.id}-${index}`}
-                  className={`absolute transition-all duration-75 ease-linear ${
+                  className={`absolute will-change-transform ${
                     index === 0 ? 'z-20' : ''
                   }`}
                   style={{
@@ -370,6 +372,8 @@ const GameBoard: React.FC = () => {
                     left: segment.x * CELL_SIZE,
                     top: segment.y * CELL_SIZE,
                     opacity: Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
+                    transform: 'translate3d(0, 0, 0)',
+                    transition: 'all 150ms linear'
                   }}
                 >
                   {index === 0 && (
@@ -409,12 +413,15 @@ const GameBoard: React.FC = () => {
             {foods.map((food, index) => (
               <div
                 key={`food-${index}`}
-                className={`absolute rounded-full snake-food ${food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'}`}
+                className={`absolute rounded-full snake-food will-change-transform ${
+                  food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'
+                }`}
                 style={{
                   width: CELL_SIZE - 2,
                   height: CELL_SIZE - 2,
                   left: food.x * CELL_SIZE,
                   top: food.y * CELL_SIZE,
+                  transform: 'translate3d(0, 0, 0)',
                 }}
               />
             ))}
@@ -422,13 +429,14 @@ const GameBoard: React.FC = () => {
             {portals.map((portal, index) => (
               <div
                 key={`portal-${index}`}
-                className="absolute bg-blue-500 rounded-full animate-pulse"
+                className="absolute bg-blue-500 rounded-full animate-pulse will-change-transform"
                 style={{
                   width: CELL_SIZE,
                   height: CELL_SIZE,
                   left: portal.x * CELL_SIZE,
                   top: portal.y * CELL_SIZE,
                   boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)',
+                  transform: 'translate3d(0, 0, 0)',
                 }}
               />
             ))}
