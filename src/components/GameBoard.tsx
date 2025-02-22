@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon } from 'lucide-react';
@@ -79,6 +80,19 @@ const GameBoard: React.FC = () => {
   };
 
   const handleDirection = (newDirection: Direction) => {
+    // Prevent 180-degree turns
+    const oppositeDirections = {
+      'UP': 'DOWN',
+      'DOWN': 'UP',
+      'LEFT': 'RIGHT',
+      'RIGHT': 'LEFT'
+    };
+    
+    // If trying to go in the opposite direction, ignore the input
+    if (oppositeDirections[direction] === newDirection) {
+      return;
+    }
+
     if (direction !== newDirection) {
       setDirection(newDirection);
       wsRef.current?.send(JSON.stringify({
@@ -103,22 +117,30 @@ const GameBoard: React.FC = () => {
       case 'arrowup':
       case 'w':
         event.preventDefault();
-        handleDirection('UP');
+        if (direction !== 'DOWN') {
+          handleDirection('UP');
+        }
         break;
       case 'arrowdown':
       case 's':
         event.preventDefault();
-        handleDirection('DOWN');
+        if (direction !== 'UP') {
+          handleDirection('DOWN');
+        }
         break;
       case 'arrowleft':
       case 'a':
         event.preventDefault();
-        handleDirection('LEFT');
+        if (direction !== 'RIGHT') {
+          handleDirection('LEFT');
+        }
         break;
       case 'arrowright':
       case 'd':
         event.preventDefault();
-        handleDirection('RIGHT');
+        if (direction !== 'LEFT') {
+          handleDirection('RIGHT');
+        }
         break;
       case ' ':
         event.preventDefault();
