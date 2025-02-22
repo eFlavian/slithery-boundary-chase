@@ -63,6 +63,10 @@ const GameBoard: React.FC = () => {
           break;
 
         case 'playerDeath':
+          if (message.data.playerId === playerId) {
+            setGameOver(true);
+            setIsPlaying(false);
+          }
           toast(message.data.message);
           break;
 
@@ -95,6 +99,7 @@ const GameBoard: React.FC = () => {
     }));
     
     setIsPlaying(true);
+    setGameOver(false);
   };
 
   const handleDirection = (newDirection: Direction) => {
@@ -468,63 +473,55 @@ const GameBoard: React.FC = () => {
               transition: 'transform 150ms linear'
             }}
           >
-            <div
-              className="absolute"
-              style={{
-                backgroundColor: 'white',
-                backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px)',
-                backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
-                width: '100%',
-                height: '100%',
-              }}
-            />
-
             {players.map(player => (
-              player.snake.map((segment: Position, index: number) => (
-                <div
-                  key={`${player.id}-${index}`}
-                  className={`absolute will-change-transform ${index === 0 ? 'z-20' : ''}`}
-                  style={{
-                    width: CELL_SIZE - 1,
-                    height: CELL_SIZE - 1,
-                    left: segment.x * CELL_SIZE,
-                    top: segment.y * CELL_SIZE,
-                    opacity: player.isPlaying ? (Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1)) : INACTIVE_PLAYER_OPACITY,
-                    transform: 'translate3d(0, 0, 0)',
-                    transition: 'all 150ms linear'
-                  }}
-                >
-                  {index === 0 && (
-                    <>
-                      <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
-                        <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight opacity-50">
-                          {player.name || `Player ${player.id}`}
-                        </span>
-                        <svg
-                          className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50"
-                          fill="currentColor"
-                          viewBox="0 0 16 16"
-                        >
-                          <path d="M8 10l-4-4h8l-4 4z" />
-                        </svg>
-                      </div>
-                      <img
-                        src="/defaultPic.webp"
-                        alt="User"
-                        className="w-full h-full rounded-sm object-cover"
+              player.snake.map((segment: Position, index: number) => {
+                const isPlayerActive = player.isPlaying && !player.gameOver;
+                return (
+                  <div
+                    key={`${player.id}-${index}`}
+                    className={`absolute will-change-transform ${index === 0 ? 'z-20' : ''}`}
+                    style={{
+                      width: CELL_SIZE - 1,
+                      height: CELL_SIZE - 1,
+                      left: segment.x * CELL_SIZE,
+                      top: segment.y * CELL_SIZE,
+                      opacity: isPlayerActive ? Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1) : 0.2,
+                      transform: 'translate3d(0, 0, 0)',
+                      transition: 'all 150ms linear'
+                    }}
+                  >
+                    {index === 0 && (
+                      <>
+                        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
+                          <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight opacity-50">
+                            {player.name}
+                          </span>
+                          <svg
+                            className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50"
+                            fill="currentColor"
+                            viewBox="0 0 16 16"
+                          >
+                            <path d="M8 10l-4-4h8l-4 4z" />
+                          </svg>
+                        </div>
+                        <img
+                          src="/defaultPic.webp"
+                          alt="User"
+                          className="w-full h-full rounded-sm object-cover"
+                        />
+                      </>
+                    )}
+                    {index > 0 && (
+                      <div
+                        className={`w-full h-full rounded-sm ${player.id === playerId ?
+                          'bg-gray-800 dark:bg-gray-200' :
+                          'bg-red-500 dark:bg-red-400'
+                        }`}
                       />
-                    </>
-                  )}
-                  {index > 0 && (
-                    <div
-                      className={`w-full h-full rounded-sm ${player.id === playerId ?
-                        'bg-gray-800 dark:bg-gray-200' :
-                        'bg-red-500 dark:bg-red-400'
-                      }`}
-                    />
-                  )}
-                </div>
-              ))
+                    )}
+                  </div>
+                );
+              })
             ))}
 
             {foods.map((food, index) => (
