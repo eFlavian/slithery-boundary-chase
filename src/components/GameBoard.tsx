@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon } from 'lucide-react';
@@ -21,6 +20,16 @@ const INITIAL_SPEED = 150;
 const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
 
+const createHashPattern = () => (
+  <div
+    className="absolute inset-0 opacity-5 dark:opacity-10"
+    style={{
+      backgroundImage: 'radial-gradient(#000 1px, transparent 1px)',
+      backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`
+    }}
+  />
+);
+
 const GameBoard: React.FC = () => {
   const { theme, setTheme } = useTheme();
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -34,6 +43,17 @@ const GameBoard: React.FC = () => {
   const gameLoop = useRef<number>();
   const keyStates = useRef<{ [key: string]: boolean }>({});
   const lastMovementTime = useRef<number>(0);
+
+  const currentPlayer = players.find(p => p.id === playerId);
+  const score = currentPlayer?.score || 0;
+  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
+
+  const getViewportTransform = (snakeHead: Position) => {
+    const viewportSize = Math.min(window.innerWidth, window.innerHeight) * 0.9;
+    const translateX = -(snakeHead.x * CELL_SIZE - viewportSize / 2);
+    const translateY = -(snakeHead.y * CELL_SIZE - viewportSize / 2);
+    return `translate(${translateX}px, ${translateY}px)`;
+  };
 
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
@@ -52,7 +72,6 @@ const GameBoard: React.FC = () => {
           break;
 
         case 'gameState':
-          // Filter out dead player's snake
           const updatedPlayers = message.data.players.filter((p: any) => 
             !(gameOver && p.id === playerId)
           );
@@ -171,20 +190,7 @@ const GameBoard: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [direction, currentPlayer?.speedBoostPercentage]);
-
-  const currentPlayer = players.find(p => p.id === playerId);
-  const score = currentPlayer?.score || 0;
-  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
-
-  const getViewportTransform = (snakeHead: Position) => {
-    const viewportSize = Math.min(window.innerWidth, window.innerHeight) * 0.9;
-    
-    const translateX = -(snakeHead.x * CELL_SIZE - viewportSize / 2);
-    const translateY = -(snakeHead.y * CELL_SIZE - viewportSize / 2);
-    
-    return `translate(${translateX}px, ${translateY}px)`;
-  };
+  }, [direction, speedBoostPercentage]);
 
   const renderMinimap = () => {
     const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
@@ -268,15 +274,6 @@ const GameBoard: React.FC = () => {
       </div>
     );
   };
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [direction, currentPlayer?.speedBoostPercentage]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
