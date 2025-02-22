@@ -17,107 +17,64 @@ type Portal = Position;
 const GRID_SIZE = 256;
 const CELL_SIZE = 15;
 const INITIAL_SPEED = 150;
-const INITIAL_NORMAL_FOOD = 100;
-const INITIAL_SPECIAL_FOOD = 30;
-const INITIAL_PORTAL_COUNT = 5;
-const FOOD_SPAWN_INTERVAL = 5000;
-const PORTAL_SPAWN_INTERVAL = 20000;
-const SPEED_BOOST_INCREMENT = 25;
-const MAX_SPEED_BOOST = 100;
-const SPEED_CONSUMPTION_RATE = 0.5;
-const VISIBLE_AREA_SIZE = 64;
 const MIN_SNAKE_OPACITY = 0.3;
 
 const GameBoard: React.FC = () => {
   const { theme, setTheme } = useTheme();
-  const [snake, setSnake] = useState<Position[]>([{ x: 128, y: 128 }]);
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  const [players, setPlayers] = useState<any[]>([]);
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [portals, setPortals] = useState<Portal[]>([]);
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
-  const [score, setScore] = useState(0);
-  const [highScore, setHighScore] = useState(() => 
-    parseInt(localStorage.getItem('snakeHighScore') || '0')
-  );
-  const [speedBoostPercentage, setSpeedBoostPercentage] = useState(0);
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
   const gameLoop = useRef<number>();
 
-  const generateRandomPosition = (): Position => ({
-    x: Math.floor(Math.random() * GRID_SIZE),
-    y: Math.floor(Math.random() * GRID_SIZE),
-  });
-
-  const isPositionOccupied = (pos: Position): boolean => {
-    return (
-      snake.some(segment => segment.x === pos.x && segment.y === pos.y) ||
-      foods.some(food => food.x === pos.x && food.y === pos.y) ||
-      portals.some(portal => portal.x === pos.x && portal.y === pos.y)
-    );
-  };
-
-  const generateFood = (): FoodItem => {
-    let newFood: Position;
-    do {
-      newFood = generateRandomPosition();
-    } while (isPositionOccupied(newFood));
-
-    return {
-      ...newFood,
-      type: Math.random() < 0.2 ? 'special' : 'normal'
-    };
-  };
-
-  const generatePortal = (): Portal => {
-    let newPortal: Position;
-    do {
-      newPortal = generateRandomPosition();
-    } while (isPositionOccupied(newPortal));
+  const connectToServer = () => {
+    const ws = new WebSocket('ws://localhost:3001');
     
-    return newPortal;
-  };
+    ws.onopen = () => {
+      console.log('Connected to server');
+      toast('Connected to game server');
+    };
 
-  const initializeFoodAndPortals = () => {
-    const initialFoods: FoodItem[] = [];
-    const initialPortals: Portal[] = [];
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      
+      switch (message.type) {
+        case 'init':
+          setPlayerId(message.data.playerId);
+          break;
 
-    for (let i = 0; i < INITIAL_NORMAL_FOOD; i++) {
-      initialFoods.push({
-        ...generateRandomPosition(),
-        type: 'normal'
-      });
-    }
+        case 'gameState':
+          setPlayers(message.data.players);
+          setFoods(message.data.foods);
+          setPortals(message.data.portals);
+          break;
 
-    for (let i = 0; i < INITIAL_SPECIAL_FOOD; i++) {
-      initialFoods.push({
-        ...generateRandomPosition(),
-        type: 'special'
-      });
-    }
+        case 'gameOver':
+          setGameOver(true);
+          toast(`Game Over! Final Score: ${message.data.score}`);
+          break;
+      }
+    };
 
-    for (let i = 0; i < INITIAL_PORTAL_COUNT; i++) {
-      initialPortals.push(generatePortal());
-    }
+    ws.onclose = () => {
+      console.log('Disconnected from server');
+      toast('Disconnected from game server');
+    };
 
-    setFoods(initialFoods);
-    setPortals(initialPortals);
+    wsRef.current = ws;
   };
 
   const handleDirection = (newDirection: Direction) => {
-    switch (newDirection) {
-      case 'UP':
-        if (direction !== 'DOWN') setDirection('UP');
-        break;
-      case 'DOWN':
-        if (direction !== 'UP') setDirection('DOWN');
-        break;
-      case 'LEFT':
-        if (direction !== 'RIGHT') setDirection('LEFT');
-        break;
-      case 'RIGHT':
-        if (direction !== 'LEFT') setDirection('RIGHT');
-        break;
-    }
+    setDirection(newDirection);
+    wsRef.current?.send(JSON.stringify({
+      type: 'direction',
+      direction: newDirection,
+      playerId
+    }));
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
@@ -139,7 +96,7 @@ const GameBoard: React.FC = () => {
         handleDirection('RIGHT');
         break;
       case ' ':
-        if (speedBoostPercentage > 0) {
+        if (currentPlayer?.speedBoostPercentage > 0) {
           setIsSpeedBoostActive(true);
         }
         break;
@@ -152,102 +109,38 @@ const GameBoard: React.FC = () => {
     }
   };
 
-  const checkCollision = (head: Position): boolean => {
-    if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
-      return true;
-    }
-    
-    return snake.slice(4).some(segment => 
-      segment.x === head.x && segment.y === head.y
-    );
-  };
-
   const updateGame = () => {
+    if (!wsRef.current || gameOver) return;
+
+    wsRef.current.send(JSON.stringify({
+      type: 'update',
+      playerId
+    }));
+
     if (isSpeedBoostActive) {
-      if (speedBoostPercentage <= 0) {
-        setIsSpeedBoostActive(false);
-        toast("Speed boost depleted!", {
-          duration: 2000,
-        });
-      } else {
-        setSpeedBoostPercentage(prev => Math.max(0, prev - SPEED_CONSUMPTION_RATE));
-      }
+      wsRef.current.send(JSON.stringify({
+        type: 'speedBoost',
+        playerId
+      }));
     }
-
-    setSnake(prevSnake => {
-      const newHead = { ...prevSnake[0] };
-
-      switch (direction) {
-        case 'UP': newHead.y -= 1; break;
-        case 'DOWN': newHead.y += 1; break;
-        case 'LEFT': newHead.x -= 1; break;
-        case 'RIGHT': newHead.x += 1; break;
-      }
-
-      if (checkCollision(newHead)) {
-        setGameOver(true);
-        if (score > highScore) {
-          setHighScore(score);
-          localStorage.setItem('snakeHighScore', score.toString());
-          toast("New High Score!");
-        }
-        return prevSnake;
-      }
-
-      const newSnake = [newHead, ...prevSnake];
-      
-      const portalHit = portals.findIndex(portal => 
-        portal.x === newHead.x && portal.y === newHead.y
-      );
-
-      if (portalHit !== -1) {
-        setPortals(prev => prev.filter((_, index) => index !== portalHit));
-        const newPercentage = Math.min(speedBoostPercentage + SPEED_BOOST_INCREMENT, MAX_SPEED_BOOST);
-        setSpeedBoostPercentage(newPercentage);
-        toast(`Speed Boost increased to ${newPercentage}%!`, {
-          duration: 2000,
-        });
-      }
-
-      const foodHit = foods.findIndex(food => 
-        food.x === newHead.x && food.y === newHead.y
-      );
-
-      if (foodHit !== -1) {
-        const eatenFood = foods[foodHit];
-        setFoods(prev => prev.filter((_, index) => index !== foodHit));
-        const points = eatenFood.type === 'special' ? 5 : 1;
-        setScore(prev => prev + points);
-        
-        if (eatenFood.type === 'special') {
-          for (let i = 0; i < 4; i++) {
-            newSnake.push({ ...newSnake[newSnake.length - 1] });
-          }
-          toast("Special food! +5 points!", {
-            duration: 1000,
-          });
-        } else {
-          toast("Score: " + (score + 1), {
-            duration: 1000,
-          });
-        }
-        return newSnake;
-      }
-
-      newSnake.pop();
-      return newSnake;
-    });
   };
 
-  const startGame = () => {
-    setSnake([{ x: 128, y: 128 }]);
-    setDirection('RIGHT');
-    setGameOver(false);
-    setScore(0);
-    setSpeedBoostPercentage(0);
-    setIsSpeedBoostActive(false);
-    initializeFoodAndPortals();
-  };
+  useEffect(() => {
+    connectToServer();
+    return () => wsRef.current?.close();
+  }, []);
+
+  useEffect(() => {
+    if (!gameOver && playerId) {
+      const speed = isSpeedBoostActive ? INITIAL_SPEED / 2 : INITIAL_SPEED;
+      gameLoop.current = window.setInterval(updateGame, speed);
+      return () => clearInterval(gameLoop.current);
+    }
+  }, [gameOver, direction, isSpeedBoostActive, playerId]);
+
+  const currentPlayer = players.find(p => p.id === playerId);
+  const score = currentPlayer?.score || 0;
+  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
 
   const createHashPattern = () => {
     return (
@@ -275,37 +168,7 @@ const GameBoard: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [direction, speedBoostPercentage]);
-
-  useEffect(() => {
-    if (!gameOver) {
-      const speed = isSpeedBoostActive ? INITIAL_SPEED / 2 : INITIAL_SPEED;
-      gameLoop.current = window.setInterval(updateGame, speed);
-      return () => clearInterval(gameLoop.current);
-    }
-  }, [gameOver, direction, isSpeedBoostActive]);
-
-  useEffect(() => {
-    if (!gameOver) {
-      const foodInterval = setInterval(() => {
-        setFoods(prev => [...prev, generateFood()]);
-      }, FOOD_SPAWN_INTERVAL);
-      return () => clearInterval(foodInterval);
-    }
-  }, [gameOver]);
-
-  useEffect(() => {
-    if (!gameOver) {
-      const portalInterval = setInterval(() => {
-        setPortals(prev => [...prev, generatePortal()]);
-      }, PORTAL_SPAWN_INTERVAL);
-      return () => clearInterval(portalInterval);
-    }
-  }, [gameOver]);
-
-  useEffect(() => {
-    startGame();
-  }, []);
+  }, [direction, currentPlayer?.speedBoostPercentage]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
@@ -323,7 +186,26 @@ const GameBoard: React.FC = () => {
       <div className="relative mb-4 text-center w-full max-w-lg">
         <div className="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Score</div>
         <div className="text-4xl font-bold text-gray-800 dark:text-white">{score}</div>
-        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">High Score: {highScore}</div>
+        
+        {/* Add leaderboard */}
+        <div className="mt-4 bg-white/50 dark:bg-gray-800/50 p-4 rounded-lg">
+          <h3 className="text-sm font-semibold mb-2">Leaderboard</h3>
+          {players
+            .sort((a, b) => b.score - a.score)
+            .map(player => (
+              <div 
+                key={player.id} 
+                className={`flex justify-between items-center py-1 ${
+                  player.id === playerId ? 'text-blue-500 font-semibold' : ''
+                }`}
+              >
+                <span>{player.name}</span>
+                <span>{player.score}</span>
+              </div>
+            ))
+          }
+        </div>
+
         <div className="w-48 h-2 bg-gray-200 dark:bg-gray-700 rounded-full mt-4 overflow-hidden">
           <div 
             className="h-full bg-blue-500 transition-all duration-100"
@@ -352,11 +234,12 @@ const GameBoard: React.FC = () => {
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
-              transform: `translate(${-snake[0].x * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px, ${-snake[0].y * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px)`,
+              transform: currentPlayer?.snake?.[0] ? 
+                `translate(${-currentPlayer.snake[0].x * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px, ${-currentPlayer.snake[0].y * CELL_SIZE + (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2}px)` :
+                'translate(0, 0)',
             }}
           >
-            {/* {createHashPattern()} */}
-
+            
             <div
               className="absolute"
               style={{
@@ -368,48 +251,57 @@ const GameBoard: React.FC = () => {
               }}
             />
 
-            {snake.map((segment, index) => (
-              <div
-                key={index}
-                className={`absolute transition-all duration-150 ease-linear ${
-                  index === 0 ? 'z-20' : ''
-                }`}
-                style={{
-                  width: CELL_SIZE - 1,
-                  height: CELL_SIZE - 1,
-                  left: segment.x * CELL_SIZE,
-                  top: segment.y * CELL_SIZE,
-                  opacity: Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
-                }}
-              >
-                {index === 0 ? (
-                  <>
-                    <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
-                      <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight opacity-50">
-                        User1
-                      </span>
-                      <svg 
-                        className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50" 
-                        fill="currentColor" 
-                        viewBox="0 0 16 16"
-                      >
-                        <path d="M8 10l-4-4h8l-4 4z"/>
-                      </svg>
-                    </div>
-                    <img
-                      src="/defaultPic.webp"
-                      alt="User"
-                      className="w-full h-full rounded-sm object-cover"
+            {/* Render all players */}
+            {players.map(player => (
+              player.snake.map((segment: Position, index: number) => (
+                <div
+                  key={`${player.id}-${index}`}
+                  className={`absolute transition-all duration-150 ease-linear ${
+                    index === 0 ? 'z-20' : ''
+                  }`}
+                  style={{
+                    width: CELL_SIZE - 1,
+                    height: CELL_SIZE - 1,
+                    left: segment.x * CELL_SIZE,
+                    top: segment.y * CELL_SIZE,
+                    opacity: Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1),
+                  }}
+                >
+                  {index === 0 && (
+                    <>
+                      <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
+                        <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight opacity-50">
+                          {player.name}
+                        </span>
+                        <svg 
+                          className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50" 
+                          fill="currentColor" 
+                          viewBox="0 0 16 16"
+                        >
+                          <path d="M8 10l-4-4h8l-4 4z"/>
+                        </svg>
+                      </div>
+                      <img
+                        src="/defaultPic.webp"
+                        alt="User"
+                        className="w-full h-full rounded-sm object-cover"
+                      />
+                    </>
+                  )}
+                  {index > 0 && (
+                    <div 
+                      className={`w-full h-full rounded-sm ${
+                        player.id === playerId ? 
+                          'bg-gray-800 dark:bg-gray-200' : 
+                          'bg-red-500 dark:bg-red-400'
+                      }`}
                     />
-                  </>
-                ) : (
-                  <div 
-                    className="w-full h-full bg-gray-800 dark:bg-gray-200 rounded-sm"
-                  />
-                )}
-              </div>
+                  )}
+                </div>
+              ))
             ))}
 
+            {/* Render food */}
             {foods.map((food, index) => (
               <div
                 key={`food-${index}`}
@@ -423,6 +315,7 @@ const GameBoard: React.FC = () => {
               />
             ))}
 
+            {/* Render portals */}
             {portals.map((portal, index) => (
               <div
                 key={`portal-${index}`}
@@ -471,12 +364,12 @@ const GameBoard: React.FC = () => {
 
         <button
           className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${
-            speedBoostPercentage > 0 
+            currentPlayer?.speedBoostPercentage > 0 
               ? 'bg-blue-500 text-white' 
               : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
           } border-2 border-gray-300 dark:border-gray-600`}
           onTouchStart={() => {
-            if (speedBoostPercentage > 0) setIsSpeedBoostActive(true);
+            if (currentPlayer?.speedBoostPercentage > 0) setIsSpeedBoostActive(true);
           }}
           onTouchEnd={() => setIsSpeedBoostActive(false)}
         >
@@ -485,12 +378,12 @@ const GameBoard: React.FC = () => {
       </div>
 
       {gameOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 game-over">
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center">
             <h2 className="text-2xl font-bold mb-4 dark:text-white">Game Over</h2>
             <p className="mb-4 dark:text-gray-300">Final Score: {score}</p>
             <button
-              onClick={startGame}
+              onClick={() => window.location.reload()}
               className="px-6 py-2 bg-gray-800 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
             >
               Play Again
