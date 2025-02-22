@@ -177,19 +177,59 @@ const GameBoard: React.FC = () => {
 
   const createHashPattern = () => {
     return (
-      <div className="absolute inset-0 w-full h-full" style={{ backgroundColor:'rgba(30,30,30,0.2)' }}>
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="hash" width="20" height="20" patternUnits="userSpaceOnUse">
-              <rect width="20" height="20" fill="none"/>
-              <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
-                    stroke="#1e1e1e" 
-                    strokeWidth="2" 
-                    opacity="0.5"/>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#hash)"/>
-        </svg>
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 w-[15px] h-full left-0" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="hash-left" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
+                      stroke="#1e1e1e" 
+                      strokeWidth="2" 
+                      opacity="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#hash-left)"/>
+          </svg>
+        </div>
+        <div className="absolute inset-0 w-[15px] h-full right-0" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="hash-right" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
+                      stroke="#1e1e1e" 
+                      strokeWidth="2" 
+                      opacity="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#hash-right)"/>
+          </svg>
+        </div>
+        <div className="absolute inset-0 w-full h-[15px] top-0" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="hash-top" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
+                      stroke="#1e1e1e" 
+                      strokeWidth="2" 
+                      opacity="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#hash-top)"/>
+          </svg>
+        </div>
+        <div className="absolute inset-0 w-full h-[15px] bottom-0" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="hash-bottom" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
+                      stroke="#1e1e1e" 
+                      strokeWidth="2" 
+                      opacity="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#hash-bottom)"/>
+          </svg>
+        </div>
       </div>
     );
   };
