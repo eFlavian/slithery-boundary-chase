@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon } from 'lucide-react';
@@ -31,6 +32,8 @@ const GameBoard: React.FC = () => {
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const gameLoop = useRef<number>();
+  const keyStates = useRef<{ [key: string]: boolean }>({});
+  const lastMovementTime = useRef<number>(0);
 
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
@@ -49,12 +52,19 @@ const GameBoard: React.FC = () => {
           break;
 
         case 'gameState':
-          setPlayers(message.data.players);
+          // Filter out dead player's snake
+          const updatedPlayers = message.data.players.filter((p: any) => 
+            !(gameOver && p.id === playerId)
+          );
+          setPlayers(updatedPlayers);
           setFoods(message.data.foods);
           setPortals(message.data.portals);
           break;
 
         case 'playerDeath':
+          if (message.data.playerId === playerId) {
+            setGameOver(true);
+          }
           toast(message.data.message);
           break;
 
@@ -82,43 +92,45 @@ const GameBoard: React.FC = () => {
     }));
   };
 
+  const processMovement = () => {
+    const now = performance.now();
+    const moveDelay = 50; // Minimum delay between movements (ms)
+
+    if (now - lastMovementTime.current < moveDelay) {
+      return;
+    }
+
+    if (keyStates.current['w'] || keyStates.current['arrowup']) {
+      handleDirection('UP');
+    }
+    if (keyStates.current['s'] || keyStates.current['arrowdown']) {
+      handleDirection('DOWN');
+    }
+    if (keyStates.current['a'] || keyStates.current['arrowleft']) {
+      handleDirection('LEFT');
+    }
+    if (keyStates.current['d'] || keyStates.current['arrowright']) {
+      handleDirection('RIGHT');
+    }
+
+    lastMovementTime.current = now;
+  };
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key.startsWith('Arrow')) {
       event.preventDefault();
     }
 
-    switch (event.key.toLowerCase()) {
-      case 'arrowup':
-      case 'w':
-        event.preventDefault();
-        handleDirection('UP');
-        break;
-      case 'arrowdown':
-      case 's':
-        event.preventDefault();
-        handleDirection('DOWN');
-        break;
-      case 'arrowleft':
-      case 'a':
-        event.preventDefault();
-        handleDirection('LEFT');
-        break;
-      case 'arrowright':
-      case 'd':
-        event.preventDefault();
-        handleDirection('RIGHT');
-        break;
-      case ' ':
-        event.preventDefault();
-        if (currentPlayer?.speedBoostPercentage > 0) {
-          setIsSpeedBoostActive(true);
-        }
-        break;
-    }
+    const key = event.key.toLowerCase();
+    keyStates.current[key] = true;
+    processMovement();
   };
 
   const handleKeyUp = (event: KeyboardEvent) => {
-    if (event.key === ' ') { // Spacebar release
+    const key = event.key.toLowerCase();
+    keyStates.current[key] = false;
+
+    if (event.key === ' ') {
       setIsSpeedBoostActive(false);
     }
   };
@@ -152,35 +164,24 @@ const GameBoard: React.FC = () => {
     }
   }, [gameOver, direction, isSpeedBoostActive, playerId]);
 
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [direction, currentPlayer?.speedBoostPercentage]);
+
   const currentPlayer = players.find(p => p.id === playerId);
   const score = currentPlayer?.score || 0;
   const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
 
-  const createHashPattern = () => {
-    return (
-      <div className="absolute inset-0 w-full h-full" style={{ backgroundColor:'rgba(30,30,30,0.2)' }}>
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="hash" width="20" height="20" patternUnits="userSpaceOnUse">
-              <rect width="20" height="20" fill="none"/>
-              <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
-                    stroke="#1e1e1e" 
-                    strokeWidth="2" 
-                    opacity="0.5"/>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#hash)"/>
-        </svg>
-      </div>
-    );
-  };
-
   const getViewportTransform = (snakeHead: Position) => {
-    const viewportWidth = 90 * Math.min(window.innerWidth, window.innerHeight) / 100;
-    const viewportHeight = viewportWidth;
+    const viewportSize = Math.min(window.innerWidth, window.innerHeight) * 0.9;
     
-    const translateX = -(snakeHead.x * CELL_SIZE - viewportWidth / 2);
-    const translateY = -(snakeHead.y * CELL_SIZE - viewportHeight / 2);
+    const translateX = -(snakeHead.x * CELL_SIZE - viewportSize / 2);
+    const translateY = -(snakeHead.y * CELL_SIZE - viewportSize / 2);
     
     return `translate(${translateX}px, ${translateY}px)`;
   };
@@ -332,21 +333,21 @@ const GameBoard: React.FC = () => {
 
       <div className="absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
         style={{
-          width: '100%',
-          maxWidth: '100%',
-          height: '100%',
+          width: '90vmin',
+          height: '90vmin',
         }}
       >
         <div className="relative border-2 border-gray-200 dark:border-gray-700 w-full h-full overflow-hidden">
           {createHashPattern()}
           <div
-            className="absolute transition-all duration-150 ease-linear"
+            className="absolute"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
               transform: currentPlayer?.snake?.[0] ? 
                 getViewportTransform(currentPlayer.snake[0]) :
                 'translate(0, 0)',
+              transition: 'transform 100ms linear',
             }}
           >
             
