@@ -16,8 +16,8 @@ type Portal = Position;
 
 const GRID_SIZE = 256;
 const CELL_SIZE = 15;
-const INITIAL_SPEED = 150;
-const CAMERA_SMOOTHING = 0.15;
+const INITIAL_SPEED = 140;
+const CAMERA_SMOOTHING = 0.55;
 const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
 
@@ -39,7 +39,7 @@ const GameBoard: React.FC = () => {
 
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
-    
+
     ws.onopen = () => {
       console.log('Connected to server');
       toast('Connected to game server');
@@ -47,7 +47,7 @@ const GameBoard: React.FC = () => {
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      
+
       switch (message.type) {
         case 'init':
           setPlayerId(message.data.playerId);
@@ -170,31 +170,45 @@ const GameBoard: React.FC = () => {
 
   const createHashPattern = () => {
     return (
-      <div className="absolute inset-0 w-full h-full" style={{ backgroundColor:'rgba(30,30,30,0.2)' }}>
+      <div className="absolute inset-0 w-full h-full" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="hash" width="20" height="20" patternUnits="userSpaceOnUse">
-              <rect width="20" height="20" fill="none"/>
-              <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
-                    stroke="#1e1e1e" 
-                    strokeWidth="2" 
-                    opacity="0.5"/>
+              <rect width="20" height="20" fill="none" />
+              <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10"
+                stroke="#1e1e1e"
+                strokeWidth="2"
+                opacity="0.5" />
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#hash)"/>
+          <rect width="100%" height="100%" fill="url(#hash)" />
         </svg>
       </div>
     );
   };
 
+  const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
+
   const getViewportTransform = (snakeHead: Position) => {
     const containerWidth = window.innerWidth;
     const containerHeight = window.innerHeight;
-    
-    const x = containerWidth / 2 - (snakeHead.x * CELL_SIZE);
-    const y = containerHeight / 2 - (snakeHead.y * CELL_SIZE);
-    
-    return `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+
+    const viewportCenterX = containerWidth / 2;
+    const viewportCenterY = containerHeight / 2;
+
+    const targetX = viewportCenterX - (snakeHead.x * CELL_SIZE);
+    const targetY = viewportCenterY - (snakeHead.y * CELL_SIZE);
+
+    const now = performance.now();
+    const deltaTime = now - lastUpdateTime.current;
+    lastUpdateTime.current = now;
+
+    const smoothing = 1 - Math.exp(-CAMERA_SMOOTHING * (deltaTime / 1000)); // Exponential smoothing
+
+    cameraPositionRef.current.x = lerp(cameraPositionRef.current.x, targetX, smoothing);
+    cameraPositionRef.current.y = lerp(cameraPositionRef.current.y, targetY, smoothing);
+
+    return `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
   };
 
   const updateCamera = () => {
@@ -220,7 +234,7 @@ const GameBoard: React.FC = () => {
     if (currentPlayer?.snake?.[0]) {
       const containerWidth = window.innerWidth;
       const containerHeight = window.innerHeight;
-      
+
       cameraPositionRef.current = {
         x: containerWidth / 2 - (currentPlayer.snake[0].x * CELL_SIZE),
         y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
@@ -230,10 +244,10 @@ const GameBoard: React.FC = () => {
 
   const renderMinimap = () => {
     const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
-    
+
     return (
-      <div style={{zIndex:999}} className="absolute top-4 right-4 bg-white/90 dark:bg-gray-800/90 rounded-lg p-2 border-2 border-gray-300 dark:border-gray-600 shadow-lg">
-        <div 
+      <div style={{ zIndex: 999 }} className="absolute top-4 right-4 bg-white/90 dark:bg-gray-800/90 rounded-lg p-2 border-2 border-gray-300 dark:border-gray-600 shadow-lg">
+        <div
           className="relative"
           style={{
             width: MINIMAP_SIZE,
@@ -249,7 +263,7 @@ const GameBoard: React.FC = () => {
               >
                 {isCurrentPlayer ? (
                   <>
-                    <div 
+                    <div
                       className="absolute -translate-x-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap text-blue-500 font-medium"
                       style={{
                         left: (player.snake[0].x * CELL_SIZE * scale),
@@ -263,12 +277,11 @@ const GameBoard: React.FC = () => {
                       style={{
                         left: (player.snake[0].x * CELL_SIZE * scale),
                         top: (player.snake[0].y * CELL_SIZE * scale),
-                        transform: `translate(-50%, -50%) rotate(${
-                          player.direction === 'UP' ? '0deg' :
-                          player.direction === 'RIGHT' ? '90deg' :
-                          player.direction === 'DOWN' ? '180deg' :
-                          '-90deg'
-                        })`,
+                        transform: `translate(-50%, -50%) rotate(${player.direction === 'UP' ? '0deg' :
+                            player.direction === 'RIGHT' ? '90deg' :
+                              player.direction === 'DOWN' ? '180deg' :
+                                '-90deg'
+                          })`,
                         clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
                       }}
                     />
@@ -289,9 +302,8 @@ const GameBoard: React.FC = () => {
           {foods.map((food, index) => (
             <div
               key={`minimap-food-${index}`}
-              className={`absolute w-1 h-1 rounded-full ${
-                food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'
-              }`}
+              className={`absolute w-1 h-1 rounded-full ${food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'
+                }`}
               style={{
                 left: (food.x * CELL_SIZE * scale),
                 top: (food.y * CELL_SIZE * scale),
@@ -299,7 +311,7 @@ const GameBoard: React.FC = () => {
             />
           ))}
 
-          <div 
+          <div
             className="absolute border border-gray-300 dark:border-gray-600"
             style={{
               width: '100%',
@@ -335,20 +347,19 @@ const GameBoard: React.FC = () => {
 
       {renderMinimap()}
 
-      <div className="absolute mb-4 text-center w-full max-w-lg" style={{top:0, zIndex:999}}>
+      <div className="absolute mb-4 text-center w-full max-w-lg" style={{ top: 0, zIndex: 999 }}>
         <div className="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Score</div>
         <div className="text-4xl font-bold text-gray-800 dark:text-white">{score}</div>
-        
+
         <div className="mt-4 bg-white/50 dark:bg-gray-800/50 p-4 rounded-lg">
           <h3 className="text-sm font-semibold mb-2">Leaderboard</h3>
           {players
             .sort((a, b) => b.score - a.score)
             .map(player => (
-              <div 
-                key={player.id} 
-                className={`flex justify-between items-center py-1 ${
-                  player.id === playerId ? 'text-blue-500 font-semibold' : ''
-                }`}
+              <div
+                key={player.id}
+                className={`flex justify-between items-center py-1 ${player.id === playerId ? 'text-blue-500 font-semibold' : ''
+                  }`}
               >
                 <span>{player.name}</span>
                 <span>{player.score}</span>
@@ -359,7 +370,7 @@ const GameBoard: React.FC = () => {
 
         <div className="mt-4 p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg">
           <div className="w-48 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-blue-500 transition-all duration-100"
               style={{ width: `${speedBoostPercentage}%` }}
             />
@@ -381,8 +392,8 @@ const GameBoard: React.FC = () => {
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
-              transform: currentPlayer?.snake?.[0] ? 
-                getViewportTransform(currentPlayer.snake[0]) : 
+              transform: currentPlayer?.snake?.[0] ?
+                getViewportTransform(currentPlayer.snake[0]) :
                 'translate3d(0, 0, 0)',
               willChange: 'transform',
               transition: 'transform 150ms linear'
@@ -403,9 +414,8 @@ const GameBoard: React.FC = () => {
               player.snake.map((segment: Position, index: number) => (
                 <div
                   key={`${player.id}-${index}`}
-                  className={`absolute will-change-transform ${
-                    index === 0 ? 'z-20' : ''
-                  }`}
+                  className={`absolute will-change-transform ${index === 0 ? 'z-20' : ''
+                    }`}
                   style={{
                     width: CELL_SIZE - 1,
                     height: CELL_SIZE - 1,
@@ -422,12 +432,12 @@ const GameBoard: React.FC = () => {
                         <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300 tracking-tight opacity-50">
                           {player.name}
                         </span>
-                        <svg 
-                          className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50" 
-                          fill="currentColor" 
+                        <svg
+                          className="w-2 h-2 text-gray-600 dark:text-gray-300 mt-0.5 opacity-50"
+                          fill="currentColor"
                           viewBox="0 0 16 16"
                         >
-                          <path d="M8 10l-4-4h8l-4 4z"/>
+                          <path d="M8 10l-4-4h8l-4 4z" />
                         </svg>
                       </div>
                       <img
@@ -438,12 +448,11 @@ const GameBoard: React.FC = () => {
                     </>
                   )}
                   {index > 0 && (
-                    <div 
-                      className={`w-full h-full rounded-sm ${
-                        player.id === playerId ? 
-                          'bg-gray-800 dark:bg-gray-200' : 
+                    <div
+                      className={`w-full h-full rounded-sm ${player.id === playerId ?
+                          'bg-gray-800 dark:bg-gray-200' :
                           'bg-red-500 dark:bg-red-400'
-                      }`}
+                        }`}
                     />
                   )}
                 </div>
@@ -453,9 +462,8 @@ const GameBoard: React.FC = () => {
             {foods.map((food, index) => (
               <div
                 key={`food-${index}`}
-                className={`absolute rounded-full snake-food will-change-transform ${
-                  food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'
-                }`}
+                className={`absolute rounded-full snake-food will-change-transform ${food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'
+                  }`}
                 style={{
                   width: CELL_SIZE - 2,
                   height: CELL_SIZE - 2,
@@ -491,21 +499,21 @@ const GameBoard: React.FC = () => {
         >
           <ArrowUp className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         </button>
-        
+
         <button
           className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
           onClick={() => handleDirection('LEFT')}
         >
           <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         </button>
-        
+
         <button
           className="absolute right-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
           onClick={() => handleDirection('RIGHT')}
         >
           <ArrowRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         </button>
-        
+
         <button
           className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
           onClick={() => handleDirection('DOWN')}
@@ -514,11 +522,10 @@ const GameBoard: React.FC = () => {
         </button>
 
         <button
-          className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${
-            currentPlayer?.speedBoostPercentage > 0 
-              ? 'bg-blue-500 text-white' 
+          className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${currentPlayer?.speedBoostPercentage > 0
+              ? 'bg-blue-500 text-white'
               : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
-          } border-2 border-gray-300 dark:border-gray-600`}
+            } border-2 border-gray-300 dark:border-gray-600`}
           onTouchStart={() => {
             if (currentPlayer?.speedBoostPercentage > 0) setIsSpeedBoostActive(true);
           }}

@@ -113,8 +113,8 @@ function handleCollision(playerId, newHead) {
     };
   }
 
-  // Check self collision
-  if (player.snake.slice(4).some(segment => 
+  // Check self collision // 4 is more pretty (not so harsh)
+  if (player.snake.slice(1).some(segment => 
     segment.x === newHead.x && segment.y === newHead.y
   )) {
     return { 
