@@ -180,7 +180,7 @@ const GameBoard: React.FC = () => {
     const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
     
     return (
-      <div className="absolute top-4 right-4 bg-white/90 dark:bg-gray-800/90 rounded-lg p-2 border-2 border-gray-300 dark:border-gray-600 shadow-lg">
+      <div style={{zIndex:999}} className="absolute top-4 right-4 bg-white/90 dark:bg-gray-800/90 rounded-lg p-2 border-2 border-gray-300 dark:border-gray-600 shadow-lg">
         <div 
           className="relative"
           style={{
@@ -274,7 +274,7 @@ const GameBoard: React.FC = () => {
 
       {renderMinimap()}
 
-      <div className="relative mb-4 text-center w-full max-w-lg">
+      <div className="absolute mb-4 text-center w-full max-w-lg" style={{top:0, zIndex:999}}>
         <div className="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Score</div>
         <div className="text-4xl font-bold text-gray-800 dark:text-white">{score}</div>
         
@@ -310,11 +310,11 @@ const GameBoard: React.FC = () => {
         )}
       </div>
 
-      <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
+      <div className="absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
         style={{
           width: '100%',
-          maxWidth: '90vmin',
-          height: '90vmin',
+          maxWidth: '100%',
+          height: '100%',
         }}
       >
         <div className="relative border-2 border-gray-200 dark:border-gray-700 w-full h-full overflow-hidden">
