@@ -20,16 +20,6 @@ const INITIAL_SPEED = 150;
 const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
 
-const createHashPattern = () => (
-  <div
-    className="absolute inset-0 opacity-5 dark:opacity-10"
-    style={{
-      backgroundImage: 'radial-gradient(#000 1px, transparent 1px)',
-      backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`
-    }}
-  />
-);
-
 const GameBoard: React.FC = () => {
   const { theme, setTheme } = useTheme();
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -41,19 +31,6 @@ const GameBoard: React.FC = () => {
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const gameLoop = useRef<number>();
-  const keyStates = useRef<{ [key: string]: boolean }>({});
-  const lastMovementTime = useRef<number>(0);
-
-  const currentPlayer = players.find(p => p.id === playerId);
-  const score = currentPlayer?.score || 0;
-  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
-
-  const getViewportTransform = (snakeHead: Position) => {
-    const viewportSize = Math.min(window.innerWidth, window.innerHeight) * 0.9;
-    const translateX = -(snakeHead.x * CELL_SIZE - viewportSize / 2);
-    const translateY = -(snakeHead.y * CELL_SIZE - viewportSize / 2);
-    return `translate(${translateX}px, ${translateY}px)`;
-  };
 
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
@@ -72,18 +49,12 @@ const GameBoard: React.FC = () => {
           break;
 
         case 'gameState':
-          const updatedPlayers = message.data.players.filter((p: any) => 
-            !(gameOver && p.id === playerId)
-          );
-          setPlayers(updatedPlayers);
+          setPlayers(message.data.players);
           setFoods(message.data.foods);
           setPortals(message.data.portals);
           break;
 
         case 'playerDeath':
-          if (message.data.playerId === playerId) {
-            setGameOver(true);
-          }
           toast(message.data.message);
           break;
 
@@ -103,45 +74,12 @@ const GameBoard: React.FC = () => {
   };
 
   const handleDirection = (newDirection: Direction) => {
-    // Only update direction if it's different
-    if (direction !== newDirection) {
-      setDirection(newDirection);
-      wsRef.current?.send(JSON.stringify({
-        type: 'direction',
-        direction: newDirection,
-        playerId
-      }));
-    }
-  };
-
-  const processMovement = () => {
-    const now = performance.now();
-    const moveDelay = 32; // Smoother movement but not too fast
-
-    if (now - lastMovementTime.current < moveDelay) {
-      return;
-    }
-
-    const up = keyStates.current['w'] || keyStates.current['arrowup'];
-    const down = keyStates.current['s'] || keyStates.current['arrowdown'];
-    const left = keyStates.current['a'] || keyStates.current['arrowleft'];
-    const right = keyStates.current['d'] || keyStates.current['arrowright'];
-
-    // Priority-based direction handling
-    if (up && !down) {
-      handleDirection('UP');
-    }
-    if (down && !up) {
-      handleDirection('DOWN');
-    }
-    if (left && !right) {
-      handleDirection('LEFT');
-    }
-    if (right && !left) {
-      handleDirection('RIGHT');
-    }
-
-    lastMovementTime.current = now;
+    setDirection(newDirection);
+    wsRef.current?.send(JSON.stringify({
+      type: 'direction',
+      direction: newDirection,
+      playerId
+    }));
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
@@ -149,16 +87,38 @@ const GameBoard: React.FC = () => {
       event.preventDefault();
     }
 
-    const key = event.key.toLowerCase();
-    keyStates.current[key] = true;
-    processMovement();
+    switch (event.key.toLowerCase()) {
+      case 'arrowup':
+      case 'w':
+        event.preventDefault();
+        handleDirection('UP');
+        break;
+      case 'arrowdown':
+      case 's':
+        event.preventDefault();
+        handleDirection('DOWN');
+        break;
+      case 'arrowleft':
+      case 'a':
+        event.preventDefault();
+        handleDirection('LEFT');
+        break;
+      case 'arrowright':
+      case 'd':
+        event.preventDefault();
+        handleDirection('RIGHT');
+        break;
+      case ' ':
+        event.preventDefault();
+        if (currentPlayer?.speedBoostPercentage > 0) {
+          setIsSpeedBoostActive(true);
+        }
+        break;
+    }
   };
 
   const handleKeyUp = (event: KeyboardEvent) => {
-    const key = event.key.toLowerCase();
-    keyStates.current[key] = false;
-
-    if (event.key === ' ') {
+    if (event.key === ' ') { // Spacebar release
       setIsSpeedBoostActive(false);
     }
   };
@@ -177,9 +137,6 @@ const GameBoard: React.FC = () => {
         playerId
       }));
     }
-
-    // Process movement on each game update
-    processMovement();
   };
 
   useEffect(() => {
@@ -195,14 +152,38 @@ const GameBoard: React.FC = () => {
     }
   }, [gameOver, direction, isSpeedBoostActive, playerId]);
 
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [direction, speedBoostPercentage]);
+  const currentPlayer = players.find(p => p.id === playerId);
+  const score = currentPlayer?.score || 0;
+  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
+
+  const createHashPattern = () => {
+    return (
+      <div className="absolute inset-0 w-full h-full" style={{ backgroundColor:'rgba(30,30,30,0.2)' }}>
+        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="hash" width="20" height="20" patternUnits="userSpaceOnUse">
+              <rect width="20" height="20" fill="none"/>
+              <path d="M0,10 l20,-20 M-5,5 l10,-10 M15,25 l10,-10" 
+                    stroke="#1e1e1e" 
+                    strokeWidth="2" 
+                    opacity="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#hash)"/>
+        </svg>
+      </div>
+    );
+  };
+
+  const getViewportTransform = (snakeHead: Position) => {
+    const viewportWidth = 90 * Math.min(window.innerWidth, window.innerHeight) / 100;
+    const viewportHeight = viewportWidth;
+    
+    const translateX = -(snakeHead.x * CELL_SIZE - viewportWidth / 2);
+    const translateY = -(snakeHead.y * CELL_SIZE - viewportHeight / 2);
+    
+    return `translate(${translateX}px, ${translateY}px)`;
+  };
 
   const renderMinimap = () => {
     const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
@@ -287,6 +268,15 @@ const GameBoard: React.FC = () => {
     );
   };
 
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [direction, currentPlayer?.speedBoostPercentage]);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <button
@@ -342,21 +332,21 @@ const GameBoard: React.FC = () => {
 
       <div className="absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
         style={{
-          width: '90vmin',
-          height: '90vmin',
+          width: '100%',
+          maxWidth: '100%',
+          height: '100%',
         }}
       >
         <div className="relative border-2 border-gray-200 dark:border-gray-700 w-full h-full overflow-hidden">
           {createHashPattern()}
           <div
-            className="absolute"
+            className="absolute transition-all duration-150 ease-linear"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
               transform: currentPlayer?.snake?.[0] ? 
                 getViewportTransform(currentPlayer.snake[0]) :
                 'translate(0, 0)',
-              transition: 'transform 150ms ease-out',
             }}
           >
             
@@ -375,7 +365,7 @@ const GameBoard: React.FC = () => {
               player.snake.map((segment: Position, index: number) => (
                 <div
                   key={`${player.id}-${index}`}
-                  className={`absolute transition-all duration-150 ease-out ${
+                  className={`absolute transition-all duration-150 ease-linear ${
                     index === 0 ? 'z-20' : ''
                   }`}
                   style={{
