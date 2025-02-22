@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon } from 'lucide-react';
@@ -211,7 +212,7 @@ const GameBoard: React.FC = () => {
 
   const updateCamera = () => {
     if (currentPlayer?.snake?.[0]) {
-      const container = document.querySelector('.game-container');
+      const container = document.querySelector('.game-container') as HTMLDivElement;
       if (container) {
         container.style.transform = getViewportTransform(currentPlayer.snake[0]);
       }
