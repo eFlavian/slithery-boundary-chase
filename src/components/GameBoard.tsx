@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import NameInput from './NameInput';
 
 type Position = {
   x: number;
@@ -21,11 +20,6 @@ const INITIAL_SPEED = 150;
 const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
 
-interface MinimapTimerState {
-  isVisible: boolean;
-  timeRemaining: number;
-}
-
 const GameBoard: React.FC = () => {
   const { theme, setTheme } = useTheme();
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -35,16 +29,8 @@ const GameBoard: React.FC = () => {
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
-  const [hasEnteredName, setHasEnteredName] = useState(false);
-  const [minimapTimer, setMinimapTimer] = useState<MinimapTimerState>({
-    isVisible: false,
-    timeRemaining: 0,
-  });
-  const [isMouseControl, setIsMouseControl] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const gameLoop = useRef<number>();
-  const lastDirection = useRef<Direction>('RIGHT');
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
@@ -63,34 +49,17 @@ const GameBoard: React.FC = () => {
           break;
 
         case 'gameState':
-          if (gameOver) {
-            message.data.players = message.data.players.filter(
-              (p: any) => p.id !== playerId
-            );
-          }
           setPlayers(message.data.players);
           setFoods(message.data.foods);
           setPortals(message.data.portals);
           break;
 
-        case 'yellowDotCollected':
-          setMinimapTimer({
-            isVisible: true,
-            timeRemaining: 10,
-          });
-          break;
-
         case 'playerDeath':
-          if (message.data.playerId === playerId) {
-            setGameOver(true);
-            setIsSpeedBoostActive(false);
-          }
           toast(message.data.message);
           break;
 
         case 'gameOver':
           setGameOver(true);
-          setIsSpeedBoostActive(false);
           toast.error(`Game Over! ${message.data.message}`);
           break;
       }
@@ -105,19 +74,7 @@ const GameBoard: React.FC = () => {
   };
 
   const handleDirection = (newDirection: Direction) => {
-    const oppositeDirections = {
-      UP: 'DOWN',
-      DOWN: 'UP',
-      LEFT: 'RIGHT',
-      RIGHT: 'LEFT',
-    };
-
-    if (oppositeDirections[newDirection] === lastDirection.current) {
-      return;
-    }
-
     setDirection(newDirection);
-    lastDirection.current = newDirection;
     wsRef.current?.send(JSON.stringify({
       type: 'direction',
       direction: newDirection,
@@ -125,33 +82,10 @@ const GameBoard: React.FC = () => {
     }));
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isMouseControl || !containerRef.current || !currentPlayer?.snake?.[0]) return;
-
-    const rect = containerRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    
-    const angleRad = Math.atan2(e.clientY - centerY, e.clientX - centerX);
-    const angleDeg = (angleRad * 180) / Math.PI;
-
-    if (angleDeg >= -45 && angleDeg < 45) {
-      handleDirection('RIGHT');
-    } else if (angleDeg >= 45 && angleDeg < 135) {
-      handleDirection('DOWN');
-    } else if (angleDeg >= -135 && angleDeg < -45) {
-      handleDirection('UP');
-    } else {
-      handleDirection('LEFT');
-    }
-  };
-
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key.startsWith('Arrow')) {
       event.preventDefault();
     }
-
-    setIsMouseControl(false);
 
     switch (event.key.toLowerCase()) {
       case 'arrowup':
@@ -184,31 +118,10 @@ const GameBoard: React.FC = () => {
   };
 
   const handleKeyUp = (event: KeyboardEvent) => {
-    if (event.key === ' ') {
+    if (event.key === ' ') { // Spacebar release
       setIsSpeedBoostActive(false);
     }
   };
-
-  useEffect(() => {
-    if (currentPlayer?.speedBoostPercentage === 0) {
-      setIsSpeedBoostActive(false);
-    }
-  }, [currentPlayer?.speedBoostPercentage]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (minimapTimer.isVisible && minimapTimer.timeRemaining > 0) {
-      interval = setInterval(() => {
-        setMinimapTimer(prev => ({
-          ...prev,
-          timeRemaining: prev.timeRemaining - 1,
-        }));
-      }, 1000);
-    } else if (minimapTimer.timeRemaining <= 0) {
-      setMinimapTimer({ isVisible: false, timeRemaining: 0 });
-    }
-    return () => clearInterval(interval);
-  }, [minimapTimer.isVisible, minimapTimer.timeRemaining]);
 
   const updateGame = () => {
     if (!wsRef.current || gameOver) return;
@@ -355,30 +268,17 @@ const GameBoard: React.FC = () => {
     );
   };
 
-  const handleNameSubmit = (name: string) => {
-    wsRef.current?.send(JSON.stringify({
-      type: 'setName',
-      name,
-      playerId
-    }));
-    setHasEnteredName(true);
-  };
-
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('mousemove', handleMouseMove);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [direction, currentPlayer?.speedBoostPercentage, isMouseControl]);
+  }, [direction, currentPlayer?.speedBoostPercentage]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
-      {!hasEnteredName && <NameInput onSubmit={handleNameSubmit} />}
-
       <button
         onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         className="fixed top-4 left-4 p-2 rounded-lg bg-gray-200/80 dark:bg-gray-700/80 border-2 border-gray-300 dark:border-gray-600"
@@ -390,7 +290,7 @@ const GameBoard: React.FC = () => {
         )}
       </button>
 
-      {minimapTimer.isVisible && renderMinimap()}
+      {renderMinimap()}
 
       <div className="absolute mb-4 text-center w-full max-w-lg" style={{top:0, zIndex:999}}>
         <div className="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Score</div>
@@ -430,18 +330,17 @@ const GameBoard: React.FC = () => {
         </div>
       </div>
 
-      <div 
-        ref={containerRef}
-        className="absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
+      <div className="absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
         style={{
-          width: '90vmin',
-          height: '90vmin',
+          width: '100%',
+          maxWidth: '100%',
+          height: '100%',
         }}
       >
         <div className="relative border-2 border-gray-200 dark:border-gray-700 w-full h-full overflow-hidden">
           {createHashPattern()}
           <div
-            className="absolute transition-transform duration-100 ease-linear"
+            className="absolute transition-all duration-150 ease-linear"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
