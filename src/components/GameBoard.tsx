@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon } from 'lucide-react';
@@ -192,22 +191,10 @@ const GameBoard: React.FC = () => {
     const containerWidth = window.innerWidth;
     const containerHeight = window.innerHeight;
     
-    const viewportCenterX = containerWidth / 2;
-    const viewportCenterY = containerHeight / 2;
+    const x = containerWidth / 2 - (snakeHead.x * CELL_SIZE);
+    const y = containerHeight / 2 - (snakeHead.y * CELL_SIZE);
     
-    const targetX = viewportCenterX - (snakeHead.x * CELL_SIZE);
-    const targetY = viewportCenterY - (snakeHead.y * CELL_SIZE);
-    
-    const now = performance.now();
-    const deltaTime = now - lastUpdateTime.current;
-    lastUpdateTime.current = now;
-    
-    const smoothing = Math.min(1, CAMERA_SMOOTHING * (deltaTime / 16.667));
-    
-    cameraPositionRef.current.x += (targetX - cameraPositionRef.current.x) * smoothing;
-    cameraPositionRef.current.y += (targetY - cameraPositionRef.current.y) * smoothing;
-    
-    return `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
+    return `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
   };
 
   const updateCamera = () => {
@@ -397,7 +384,8 @@ const GameBoard: React.FC = () => {
               transform: currentPlayer?.snake?.[0] ? 
                 getViewportTransform(currentPlayer.snake[0]) : 
                 'translate3d(0, 0, 0)',
-              willChange: 'transform'
+              willChange: 'transform',
+              transition: 'transform 150ms linear'
             }}
           >
             <div
