@@ -37,6 +37,7 @@ const GameBoard: React.FC = () => {
   const lastKeyPress = useRef(0);
   const cameraPositionRef = useRef({ x: 0, y: 0 });
   const lastUpdateTime = useRef(0);
+  const animationFrameRef = useRef<number>();
 
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
