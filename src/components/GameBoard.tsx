@@ -83,29 +83,33 @@ const GameBoard: React.FC = () => {
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key.startsWith('Arrow')) {
+      event.preventDefault();
+    }
+
     switch (event.key.toLowerCase()) {
       case 'arrowup':
       case 'w':
-        event.preventDefault(); // Prevent scrolling
+        event.preventDefault();
         handleDirection('UP');
         break;
       case 'arrowdown':
       case 's':
-        event.preventDefault(); // Prevent scrolling
+        event.preventDefault();
         handleDirection('DOWN');
         break;
       case 'arrowleft':
       case 'a':
-        event.preventDefault(); // Prevent scrolling
+        event.preventDefault();
         handleDirection('LEFT');
         break;
       case 'arrowright':
       case 'd':
-        event.preventDefault(); // Prevent scrolling
+        event.preventDefault();
         handleDirection('RIGHT');
         break;
       case ' ':
-        event.preventDefault(); // Prevent scrolling
+        event.preventDefault();
         if (currentPlayer?.speedBoostPercentage > 0) {
           setIsSpeedBoostActive(true);
         }
@@ -193,31 +197,51 @@ const GameBoard: React.FC = () => {
             height: MINIMAP_SIZE,
           }}
         >
-          {currentPlayer?.snake?.[0] && (
-            <div 
-              className="absolute border-2 border-blue-500 pointer-events-none"
-              style={{
-                width: (90 * Math.min(window.innerWidth, window.innerHeight) / 100) * scale,
-                height: (90 * Math.min(window.innerWidth, window.innerHeight) / 100) * scale,
-                left: (currentPlayer.snake[0].x * CELL_SIZE - (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2) * scale + MINIMAP_SIZE / 2,
-                top: (currentPlayer.snake[0].y * CELL_SIZE - (90 * Math.min(window.innerWidth, window.innerHeight) / 100) / 2) * scale + MINIMAP_SIZE / 2,
-                transform: 'translate(-50%, -50%)',
-              }}
-            />
-          )}
-
-          {players.map(player => (
-            <div
-              key={`minimap-${player.id}`}
-              className={`absolute w-2 h-2 rounded-full ${
-                player.id === playerId ? 'bg-blue-500' : 'bg-red-500'
-              }`}
-              style={{
-                left: (player.snake[0].x * CELL_SIZE * scale),
-                top: (player.snake[0].y * CELL_SIZE * scale),
-              }}
-            />
-          ))}
+          {players.map(player => {
+            const isCurrentPlayer = player.id === playerId;
+            return (
+              <div
+                key={`minimap-${player.id}`}
+                className="absolute"
+              >
+                {isCurrentPlayer ? (
+                  <>
+                    <div 
+                      className="absolute -translate-x-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap text-blue-500 font-medium"
+                      style={{
+                        left: (player.snake[0].x * CELL_SIZE * scale),
+                        top: (player.snake[0].y * CELL_SIZE * scale) - 10,
+                      }}
+                    >
+                      {player.name}
+                    </div>
+                    <div
+                      className="absolute w-3 h-3 bg-blue-500"
+                      style={{
+                        left: (player.snake[0].x * CELL_SIZE * scale),
+                        top: (player.snake[0].y * CELL_SIZE * scale),
+                        transform: `translate(-50%, -50%) rotate(${
+                          player.direction === 'UP' ? '0deg' :
+                          player.direction === 'RIGHT' ? '90deg' :
+                          player.direction === 'DOWN' ? '180deg' :
+                          '-90deg'
+                        })`,
+                        clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
+                      }}
+                    />
+                  </>
+                ) : (
+                  <div
+                    className="absolute w-2 h-2 bg-red-500 rounded-full -translate-x-1/2 -translate-y-1/2"
+                    style={{
+                      left: (player.snake[0].x * CELL_SIZE * scale),
+                      top: (player.snake[0].y * CELL_SIZE * scale),
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
 
           {foods.map((food, index) => (
             <div
@@ -228,17 +252,6 @@ const GameBoard: React.FC = () => {
               style={{
                 left: (food.x * CELL_SIZE * scale),
                 top: (food.y * CELL_SIZE * scale),
-              }}
-            />
-          ))}
-
-          {portals.map((portal, index) => (
-            <div
-              key={`minimap-portal-${index}`}
-              className="absolute w-1 h-1 rounded-full bg-blue-500"
-              style={{
-                left: (portal.x * CELL_SIZE * scale),
-                top: (portal.y * CELL_SIZE * scale),
               }}
             />
           ))}
@@ -301,18 +314,20 @@ const GameBoard: React.FC = () => {
           }
         </div>
 
-        <div className="w-48 h-2 bg-gray-200 dark:bg-gray-700 rounded-full mt-4 overflow-hidden">
-          <div 
-            className="h-full bg-blue-500 transition-all duration-100"
-            style={{ width: `${speedBoostPercentage}%` }}
-          />
+        <div className="mt-4 p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+          <div className="w-48 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-blue-500 transition-all duration-100"
+              style={{ width: `${speedBoostPercentage}%` }}
+            />
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Speed Boost: {Math.round(speedBoostPercentage)}%
+          </div>
+          {isSpeedBoostActive && (
+            <div className="text-sm text-blue-500 mt-2 animate-pulse">Speed Boost Active!</div>
+          )}
         </div>
-        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Speed Boost: {Math.round(speedBoostPercentage)}%
-        </div>
-        {isSpeedBoostActive && (
-          <div className="text-sm text-blue-500 mt-2 animate-pulse">Speed Boost Active!</div>
-        )}
       </div>
 
       <div className="absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 backdrop-blur-sm bg-opacity-90 dark:bg-opacity-90 border-2 border-gray-300 dark:border-gray-600 overflow-hidden"
