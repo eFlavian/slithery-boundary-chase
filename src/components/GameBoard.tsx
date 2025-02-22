@@ -1,7 +1,6 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
 type Position = {
@@ -31,11 +30,12 @@ const GameBoard: React.FC = () => {
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
+  const [playerName, setPlayerName] = useState('');
+  const [isPlaying, setIsPlaying] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
   const cameraPositionRef = useRef({ x: 0, y: 0 });
-  const animationFrameRef = useRef<number>();
   const lastUpdateTime = useRef(0);
 
   const connectToServer = () => {
@@ -66,6 +66,7 @@ const GameBoard: React.FC = () => {
 
         case 'gameOver':
           setGameOver(true);
+          setIsPlaying(false);
           toast.error(`Game Over! ${message.data.message}`);
           break;
       }
@@ -79,8 +80,22 @@ const GameBoard: React.FC = () => {
     wsRef.current = ws;
   };
 
+  const handleStartGame = () => {
+    if (!playerName.trim()) {
+      toast.error("Please enter a name first!");
+      return;
+    }
+
+    wsRef.current?.send(JSON.stringify({
+      type: 'spawn',
+      playerName: playerName.trim(),
+      playerId
+    }));
+    
+    setIsPlaying(true);
+  };
+
   const handleDirection = (newDirection: Direction) => {
-    // Prevent 180-degree turns
     const oppositeDirections = {
       'UP': 'DOWN',
       'DOWN': 'UP',
@@ -88,7 +103,6 @@ const GameBoard: React.FC = () => {
       'RIGHT': 'LEFT'
     };
     
-    // If trying to go in the opposite direction, ignore the input
     if (oppositeDirections[direction] === newDirection) {
       return;
     }
@@ -179,12 +193,12 @@ const GameBoard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!gameOver && playerId) {
+    if (!gameOver && playerId && isPlaying) {
       const speed = isSpeedBoostActive ? INITIAL_SPEED / 2 : INITIAL_SPEED;
       gameLoop.current = window.setInterval(updateGame, speed);
       return () => clearInterval(gameLoop.current);
     }
-  }, [gameOver, direction, isSpeedBoostActive, playerId]);
+  }, [gameOver, direction, isSpeedBoostActive, playerId, isPlaying]);
 
   const currentPlayer = players.find(p => p.id === playerId);
   const score = currentPlayer?.score || 0;
@@ -366,6 +380,37 @@ const GameBoard: React.FC = () => {
           <Moon className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         )}
       </button>
+
+      {!isPlaying && !gameOver && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl w-96 space-y-6">
+            <h2 className="text-2xl font-bold text-center dark:text-white">Welcome to Snake Game</h2>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="playerName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Enter your name
+                </label>
+                <input
+                  type="text"
+                  id="playerName"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  placeholder="Your name"
+                  maxLength={15}
+                />
+              </div>
+              <button
+                onClick={handleStartGame}
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                <Play className="w-5 h-5" />
+                Start Game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {renderMinimap()}
 
