@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
 type Position = {
@@ -38,6 +38,7 @@ const GameBoard: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMinimapVisible, setIsMinimapVisible] = useState(false);
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
@@ -46,13 +47,26 @@ const GameBoard: React.FC = () => {
   const animationFrameRef = useRef<number>();
   const minimapTimerRef = useRef<number>();
   const minimapBlinkRef = useRef<number>();
+  const reconnectTimerRef = useRef<number>();
 
   const connectToServer = () => {
-    const ws = new WebSocket('ws://localhost:3001');
+    // Fix for mobile: Use the current hostname instead of hardcoded localhost
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
+    const wsUrl = `${protocol}//${wsHost}`;
+    
+    console.log(`Connecting to WebSocket server at: ${wsUrl}`);
+    
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+    
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       console.log('Connected to server');
-      toast('Connected to game server');
+      toast.success('Connected to game server');
+      setReconnectAttempts(0);
     };
 
     ws.onmessage = (event) => {
@@ -134,7 +148,26 @@ const GameBoard: React.FC = () => {
 
     ws.onclose = () => {
       console.log('Disconnected from server');
-      toast('Disconnected from game server');
+      toast.error('Disconnected from game server');
+      
+      // Attempt to reconnect with exponential backoff
+      if (reconnectAttempts < 5) {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
+        
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current);
+        }
+        
+        reconnectTimerRef.current = window.setTimeout(() => {
+          setReconnectAttempts(prev => prev + 1);
+          connectToServer();
+        }, delay);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
     };
 
     wsRef.current = ws;
@@ -258,6 +291,9 @@ const GameBoard: React.FC = () => {
       }
       if (minimapBlinkRef.current) {
         clearInterval(minimapBlinkRef.current);
+      }
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
       }
     };
   }, []);
@@ -471,11 +507,104 @@ const GameBoard: React.FC = () => {
     };
   }, [direction, currentPlayer?.speedBoostPercentage]);
 
+  // Player Score UI
+  const renderPlayerScore = () => {
+    return (
+      <div className="absolute top-4 transform left-1/2 -translate-x-1/2 z-[999] text-center">
+        <div className="bg-black/40 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/20 text-white">
+          <div className="text-3xl font-bold mb-1">{score}</div>
+          <div className="text-xs uppercase tracking-widest opacity-70">SCORE</div>
+        </div>
+      </div>
+    );
+  };
+
+  // Leaderboard UI
+  const renderLeaderboard = () => {
+    // Only show top 10 players
+    const topPlayers = [...players]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+      
+    return (
+      <div className="absolute left-4 top-20 z-[999] max-w-[180px]">
+        <div className="bg-black/40 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-white/20">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy className="w-4 h-4 text-yellow-400" />
+            <h3 className="text-xs uppercase tracking-wider text-white font-semibold">Leaderboard</h3>
+          </div>
+          <div className="space-y-1.5 max-h-[300px] overflow-y-auto scrollbar-thin">
+            {topPlayers.map((player, index) => (
+              <div
+                key={player.id}
+                className={`flex justify-between items-center text-xs rounded-lg px-2 py-1 ${
+                  player.id === playerId 
+                    ? 'bg-blue-500/30 text-white font-semibold' 
+                    : 'text-white/90'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="text-xs opacity-60 w-4">{index + 1}.</span>
+                  <span className="truncate">{player.name}</span>
+                </div>
+                <span className="font-semibold">{player.score}</span>
+              </div>
+            ))}
+            {players.length === 0 && (
+              <div className="text-xs text-white/50 italic text-center py-2">
+                No players online
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Speed Boost UI
+  const renderSpeedBoost = () => {
+    const boostActive = isSpeedBoostActive && speedBoostPercentage > 0;
+    return (
+      <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-[999]">
+        <div className="bg-black/40 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-white/20 flex flex-col items-center">
+          <div className="flex items-center gap-1.5 mb-3">
+            <Zap className={`w-4 h-4 ${boostActive ? 'text-yellow-400' : 'text-white/70'}`} />
+            <div className="text-xs uppercase tracking-wider text-white/90 font-semibold">Boost</div>
+          </div>
+          
+          <div className="relative h-[150px] w-6 bg-gray-900/60 rounded-full overflow-hidden mb-2">
+            <div 
+              className={`absolute bottom-0 left-0 right-0 rounded-full transition-all duration-300 ease-out ${
+                boostActive ? 'bg-gradient-to-t from-yellow-500 to-blue-500 animate-pulse' : 'bg-gradient-to-t from-blue-400 to-blue-600'
+              }`}
+              style={{ height: `${speedBoostPercentage}%` }}
+            />
+            
+            {/* Boost level markers */}
+            <div className="absolute inset-0 flex flex-col justify-between py-2 pointer-events-none">
+              {[0, 1, 2, 3, 4].map((_, i) => (
+                <div key={i} className="w-full h-px bg-white/20" />
+              ))}
+            </div>
+          </div>
+          
+          <div className="text-xs text-white text-center">
+            {Math.round(speedBoostPercentage)}%
+          </div>
+          
+          {boostActive && (
+            <div className="text-xs text-yellow-400 font-semibold mt-1 animate-pulse">ACTIVE</div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <button
         onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        className="fixed top-4 left-4 p-2 rounded-lg bg-gray-200/80 dark:bg-gray-700/80 border-2 border-gray-300 dark:border-gray-600"
+        className="fixed top-4 left-4 p-2 rounded-lg bg-gray-200/80 dark:bg-gray-700/80 border-2 border-gray-300 dark:border-gray-600 z-[999]"
       >
         {theme === 'dark' ? (
           <Sun className="w-6 h-6 text-gray-700 dark:text-gray-200" />
@@ -516,43 +645,9 @@ const GameBoard: React.FC = () => {
       )}
 
       {renderMinimap()}
-
-      <div className="absolute mb-4 text-center w-full max-w-lg" style={{ top: 0, zIndex: 999 }}>
-        <div className="text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Score</div>
-        <div className="text-4xl font-bold text-gray-800 dark:text-white">{score}</div>
-
-        <div className="mt-4 bg-white/50 dark:bg-gray-800/50 p-4 rounded-lg">
-          <h3 className="text-sm font-semibold mb-2">Leaderboard</h3>
-          {players
-            .sort((a, b) => b.score - a.score)
-            .map(player => (
-              <div
-                key={player.id}
-                className={`flex justify-between items-center py-1 ${player.id === playerId ? 'text-blue-500 font-semibold' : ''
-                  }`}
-              >
-                <span>{player.name}</span>
-                <span>{player.score}</span>
-              </div>
-            ))
-          }
-        </div>
-
-        <div className="mt-4 p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg">
-          <div className="w-48 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-blue-500 transition-all duration-100"
-              style={{ width: `${speedBoostPercentage}%` }}
-            />
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Speed Boost: {Math.round(speedBoostPercentage)}%
-          </div>
-          {isSpeedBoostActive && speedBoostPercentage > 0 && (
-            <div className="text-sm text-blue-500 mt-2 animate-pulse">Speed Boost Active!</div>
-          )}
-        </div>
-      </div>
+      {renderPlayerScore()}
+      {renderLeaderboard()}
+      {renderSpeedBoost()}
 
       <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="relative w-full h-full">
@@ -678,7 +773,7 @@ const GameBoard: React.FC = () => {
         </div>
       </div>
 
-      <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-64 h-64">
+      <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-64 h-64 z-[999]">
         <button
           className="absolute top-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
           onClick={() => handleDirection('UP')}
@@ -722,13 +817,13 @@ const GameBoard: React.FC = () => {
       </div>
 
       {gameOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center">
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[1000]">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center backdrop-blur-md">
             <h2 className="text-2xl font-bold mb-4 dark:text-white">Game Over</h2>
             <p className="mb-4 dark:text-gray-300">Final Score: {score}</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-gray-800 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               Play Again
             </button>
