@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap } from 'lucide-react';
@@ -102,21 +101,21 @@ const GameBoard: React.FC = () => {
           break;
           
         case 'minimapUpdate':
+          // Clear any existing timers if this is a reset
+          if (message.data.reset) {
+            if (minimapTimerRef.current) {
+              clearTimeout(minimapTimerRef.current);
+            }
+            if (minimapBlinkRef.current) {
+              clearInterval(minimapBlinkRef.current);
+            }
+          }
+          
           setIsMinimapVisible(message.data.visible);
           setMinimapTimeLeft(message.data.duration);
           
-          // Set up a countdown timer
-          if (minimapTimerRef.current) {
-            clearTimeout(minimapTimerRef.current);
-          }
-          if (minimapBlinkRef.current) {
-            clearInterval(minimapBlinkRef.current);
-          }
-          
-          // Start countdown
+          // Start new countdown
           let timeLeft = message.data.duration;
-          const tickInterval = 1000; // 1 second
-          
           const countdownInterval = setInterval(() => {
             timeLeft -= 1;
             setMinimapTimeLeft(timeLeft);
@@ -124,16 +123,19 @@ const GameBoard: React.FC = () => {
             // Start blinking when 3 seconds are left
             if (timeLeft === 3) {
               let isVisible = true;
+              if (minimapBlinkRef.current) {
+                clearInterval(minimapBlinkRef.current);
+              }
               minimapBlinkRef.current = window.setInterval(() => {
                 isVisible = !isVisible;
                 setIsMinimapVisible(isVisible);
-              }, 500); // Blink every 500ms
+              }, 500);
             }
             
             if (timeLeft <= 0) {
               clearInterval(countdownInterval);
             }
-          }, tickInterval);
+          }, 1000);
           
           // Set timeout to stop the minimap visibility
           minimapTimerRef.current = window.setTimeout(() => {
@@ -388,22 +390,34 @@ const GameBoard: React.FC = () => {
     if (!isMinimapVisible) return null;
     
     const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
-    const blinkClass = minimapTimeLeft <= 3 ? "animate-pulse" : "";
 
     return (
       <div 
         style={{ zIndex: 999 }} 
-        className={`absolute top-4 right-4 bg-white/90 dark:bg-gray-800/90 rounded-lg p-2 border-2 border-gray-300 dark:border-gray-600 shadow-lg ${blinkClass}`}
+        className={`absolute top-4 right-4 bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-3
+          ${minimapTimeLeft <= 3 ? "animate-pulse" : ""}`}
       >
+        {/* Timer display */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs text-white/70 font-medium">Minimap</div>
+          <div className="text-xs text-white/90 font-semibold">{minimapTimeLeft}s</div>
+        </div>
+
         <div
-          className="relative"
+          className="relative rounded-xl overflow-hidden"
           style={{
             width: MINIMAP_SIZE,
             height: MINIMAP_SIZE,
           }}
         >
+          {/* Background grid */}
+          <div className="absolute inset-0 bg-gray-900/60" />
+
+          {/* Game elements */}
           {players.map(player => {
             const isCurrentPlayer = player.id === playerId;
+            if (!player.snake?.[0]) return null;
+            
             return (
               <div
                 key={`minimap-${player.id}`}
@@ -412,7 +426,7 @@ const GameBoard: React.FC = () => {
                 {isCurrentPlayer ? (
                   <>
                     <div
-                      className="absolute -translate-x-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap text-blue-500 font-medium"
+                      className="absolute -translate-x-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap text-blue-400 font-medium"
                       style={{
                         left: (player.snake[0].x * CELL_SIZE * scale),
                         top: (player.snake[0].y * CELL_SIZE * scale) - 10,
@@ -425,25 +439,25 @@ const GameBoard: React.FC = () => {
                       style={{
                         left: (player.snake[0].x * CELL_SIZE * scale),
                         top: (player.snake[0].y * CELL_SIZE * scale),
-                        transform: `translate(-50%, -50%) rotate(${player.direction === 'UP' ? '0deg' :
-                            player.direction === 'RIGHT' ? '90deg' :
-                              player.direction === 'DOWN' ? '180deg' :
-                                '-90deg'
-                          })`,
+                        transform: `translate(-50%, -50%) rotate(${
+                          player.direction === 'UP' ? '0deg' :
+                          player.direction === 'RIGHT' ? '90deg' :
+                          player.direction === 'DOWN' ? '180deg' : '-90deg'
+                        })`,
                         clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
                       }}
                     />
                   </>
                 ) : (
                   <div
-                    className="absolute w-3 h-3 bg-red-500"
+                    className="absolute w-3 h-3 bg-red-500/80"
                     style={{
                       left: (player.snake[0].x * CELL_SIZE * scale),
                       top: (player.snake[0].y * CELL_SIZE * scale),
-                      transform: `translate(-50%, -50%) rotate(${player.direction === 'UP' ? '0deg' :
+                      transform: `translate(-50%, -50%) rotate(${
+                        player.direction === 'UP' ? '0deg' :
                         player.direction === 'RIGHT' ? '90deg' :
-                          player.direction === 'DOWN' ? '180deg' :
-                            '-90deg'
+                        player.direction === 'DOWN' ? '180deg' : '-90deg'
                       })`,
                       clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
                     }}
@@ -456,8 +470,9 @@ const GameBoard: React.FC = () => {
           {foods.map((food, index) => (
             <div
               key={`minimap-food-${index}`}
-              className={`absolute w-1 h-1 rounded-full ${food.type === 'special' ? 'bg-purple-500' : 'bg-red-500'
-                }`}
+              className={`absolute w-1 h-1 rounded-full ${
+                food.type === 'special' ? 'bg-purple-500/80' : 'bg-red-500/80'
+              }`}
               style={{
                 left: (food.x * CELL_SIZE * scale),
                 top: (food.y * CELL_SIZE * scale),
@@ -468,7 +483,7 @@ const GameBoard: React.FC = () => {
           {yellowDots.map((dot, index) => (
             <div
               key={`minimap-yellowdot-${index}`}
-              className="absolute w-1 h-1 rounded-full bg-yellow-500"
+              className="absolute w-1 h-1 rounded-full bg-yellow-500/80"
               style={{
                 left: (dot.x * CELL_SIZE * scale),
                 top: (dot.y * CELL_SIZE * scale),
@@ -476,19 +491,14 @@ const GameBoard: React.FC = () => {
             />
           ))}
 
+          {/* Grid overlay */}
           <div
-            className="absolute border border-gray-300 dark:border-gray-600"
+            className="absolute inset-0 opacity-10"
             style={{
-              width: '100%',
-              height: '100%',
+              backgroundImage: 'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)',
+              backgroundSize: `${MINIMAP_SIZE / 10}px ${MINIMAP_SIZE / 10}px`
             }}
           />
-          
-          {minimapTimeLeft > 0 && (
-            <div className="absolute -top-5 left-0 right-0 text-center text-xs text-gray-600 dark:text-gray-300">
-              Minimap: {minimapTimeLeft}s
-            </div>
-          )}
         </div>
       </div>
     );
@@ -783,7 +793,7 @@ const GameBoard: React.FC = () => {
 
         <button
           className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-          onClick={() => handleDirection('LEFT')}
+          onClick={()={() => handleDirection('LEFT')}
         >
           <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         </button>
@@ -796,42 +806,4 @@ const GameBoard: React.FC = () => {
         </button>
 
         <button
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-          onClick={() => handleDirection('DOWN')}
-        >
-          <ArrowDown className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-        </button>
-
-        <button
-          className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${currentPlayer?.speedBoostPercentage > 0
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
-            } border-2 border-gray-300 dark:border-gray-600`}
-          onTouchStart={() => {
-            if (currentPlayer?.speedBoostPercentage > 0) setIsSpeedBoostActive(true);
-          }}
-          onTouchEnd={() => setIsSpeedBoostActive(false)}
-        >
-          BOOST
-        </button>
-      </div>
-
-      {gameOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[1000]">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center backdrop-blur-md">
-            <h2 className="text-2xl font-bold mb-4 dark:text-white">Game Over</h2>
-            <p className="mb-4 dark:text-gray-300">Final Score: {score}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Play Again
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default GameBoard;
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-
