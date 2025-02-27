@@ -22,3 +22,4 @@ export default Index;
 9. I want mouse support. Player should follow the mouse if mouse is focused. If player presses wasd or arrows, disable focus on mouse until player moves mouse again.
 
 **/
+ 
