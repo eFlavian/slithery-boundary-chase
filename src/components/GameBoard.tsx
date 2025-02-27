@@ -650,11 +650,11 @@ const GameBoard: React.FC = () => {
 
       {!isPlaying && !gameOver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl w-96 space-y-6">
-            <h2 className="text-2xl font-bold text-center dark:text-white">Welcome to Snake Game</h2>
+          <div className="bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-6 max-w-sm w-full">
+            <h2 className="text-2xl font-bold text-center text-white mb-6">Welcome to Snake Game</h2>
             <div className="space-y-4">
               <div>
-                <label htmlFor="playerName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label htmlFor="playerName" className="block text-sm font-medium text-white/80 mb-2">
                   Enter your name
                 </label>
                 <input
@@ -662,14 +662,14 @@ const GameBoard: React.FC = () => {
                   id="playerName"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="w-full px-4 py-2 bg-gray-900/60 border border-white/20 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Your name"
                   maxLength={15}
                 />
               </div>
               <button
                 onClick={handleStartGame}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mt-4"
               >
                 <Play className="w-5 h-5" />
                 Start Game
@@ -852,15 +852,21 @@ const GameBoard: React.FC = () => {
       </div>
 
       {gameOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[1000]">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center backdrop-blur-md">
-            <h2 className="text-2xl font-bold mb-4 dark:text-white">Game Over</h2>
-            <p className="mb-4 dark:text-gray-300">Final Score: {score}</p>
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-[1000]">
+          <div className="bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-6 max-w-sm w-full text-center">
+            <h2 className="text-2xl font-bold mb-4 text-white">Game Over</h2>
+            <div className="flex justify-center items-center space-x-2 mb-6">
+              <Trophy className="w-5 h-5 text-yellow-400" />
+              <p className="text-white text-xl font-semibold">Score: {score}</p>
+            </div>
             <button
               onClick={() => window.location.reload()}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Play Again
+              <div className="flex items-center justify-center gap-2">
+                <Play className="w-4 h-4" />
+                Play Again
+              </div>
             </button>
           </div>
         </div>
