@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play } from 'lucide-react';
@@ -13,6 +14,7 @@ type FoodType = 'normal' | 'special';
 
 type FoodItem = Position & { type: FoodType };
 type Portal = Position;
+type YellowDot = Position;
 
 const GRID_SIZE = 256;
 const CELL_SIZE = 15;
@@ -27,18 +29,23 @@ const GameBoard: React.FC = () => {
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [players, setPlayers] = useState<any[]>([]);
   const [foods, setFoods] = useState<FoodItem[]>([]);
+  const [yellowDots, setYellowDots] = useState<YellowDot[]>([]);
   const [portals, setPortals] = useState<Portal[]>([]);
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
   const [playerName, setPlayerName] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isMinimapVisible, setIsMinimapVisible] = useState(false);
+  const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
   const cameraPositionRef = useRef({ x: 0, y: 0 });
   const lastUpdateTime = useRef(0);
   const animationFrameRef = useRef<number>();
+  const minimapTimerRef = useRef<number>();
+  const minimapBlinkRef = useRef<number>();
 
   const connectToServer = () => {
     const ws = new WebSocket('ws://localhost:3001');
@@ -59,6 +66,7 @@ const GameBoard: React.FC = () => {
         case 'gameState':
           setPlayers(message.data.players);
           setFoods(message.data.foods);
+          setYellowDots(message.data.yellowDots || []);
           setPortals(message.data.portals);
           break;
 
@@ -69,7 +77,57 @@ const GameBoard: React.FC = () => {
         case 'gameOver':
           setGameOver(true);
           setIsPlaying(false);
+          setIsMinimapVisible(false);
+          if (minimapTimerRef.current) {
+            clearTimeout(minimapTimerRef.current);
+          }
+          if (minimapBlinkRef.current) {
+            clearInterval(minimapBlinkRef.current);
+          }
           toast.error(`Game Over! ${message.data.message}`);
+          break;
+          
+        case 'minimapUpdate':
+          setIsMinimapVisible(message.data.visible);
+          setMinimapTimeLeft(message.data.duration);
+          
+          // Set up a countdown timer
+          if (minimapTimerRef.current) {
+            clearTimeout(minimapTimerRef.current);
+          }
+          if (minimapBlinkRef.current) {
+            clearInterval(minimapBlinkRef.current);
+          }
+          
+          // Start countdown
+          let timeLeft = message.data.duration;
+          const tickInterval = 1000; // 1 second
+          
+          const countdownInterval = setInterval(() => {
+            timeLeft -= 1;
+            setMinimapTimeLeft(timeLeft);
+            
+            // Start blinking when 3 seconds are left
+            if (timeLeft === 3) {
+              let isVisible = true;
+              minimapBlinkRef.current = window.setInterval(() => {
+                isVisible = !isVisible;
+                setIsMinimapVisible(isVisible);
+              }, 500); // Blink every 500ms
+            }
+            
+            if (timeLeft <= 0) {
+              clearInterval(countdownInterval);
+            }
+          }, tickInterval);
+          
+          // Set timeout to stop the minimap visibility
+          minimapTimerRef.current = window.setTimeout(() => {
+            setIsMinimapVisible(false);
+            if (minimapBlinkRef.current) {
+              clearInterval(minimapBlinkRef.current);
+            }
+          }, message.data.duration * 1000);
           break;
       }
     };
@@ -181,17 +239,27 @@ const GameBoard: React.FC = () => {
       playerId
     }));
 
-    if (isSpeedBoostActive) {
+    if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage > 0) {
       wsRef.current.send(JSON.stringify({
         type: 'speedBoost',
         playerId
       }));
+    } else if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage <= 0) {
+      setIsSpeedBoostActive(false);
     }
   };
 
   useEffect(() => {
     connectToServer();
-    return () => wsRef.current?.close();
+    return () => {
+      wsRef.current?.close();
+      if (minimapTimerRef.current) {
+        clearTimeout(minimapTimerRef.current);
+      }
+      if (minimapBlinkRef.current) {
+        clearInterval(minimapBlinkRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -281,10 +349,16 @@ const GameBoard: React.FC = () => {
   }, [playerId]);
 
   const renderMinimap = () => {
+    if (!isMinimapVisible) return null;
+    
     const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
+    const blinkClass = minimapTimeLeft <= 3 ? "animate-pulse" : "";
 
     return (
-      <div style={{ zIndex: 999 }} className="absolute top-4 right-4 bg-white/90 dark:bg-gray-800/90 rounded-lg p-2 border-2 border-gray-300 dark:border-gray-600 shadow-lg">
+      <div 
+        style={{ zIndex: 999 }} 
+        className={`absolute top-4 right-4 bg-white/90 dark:bg-gray-800/90 rounded-lg p-2 border-2 border-gray-300 dark:border-gray-600 shadow-lg ${blinkClass}`}
+      >
         <div
           className="relative"
           style={{
@@ -326,10 +400,16 @@ const GameBoard: React.FC = () => {
                   </>
                 ) : (
                   <div
-                    className="absolute w-2 h-2 bg-red-500 rounded-full -translate-x-1/2 -translate-y-1/2"
+                    className="absolute w-3 h-3 bg-red-500"
                     style={{
                       left: (player.snake[0].x * CELL_SIZE * scale),
                       top: (player.snake[0].y * CELL_SIZE * scale),
+                      transform: `translate(-50%, -50%) rotate(${player.direction === 'UP' ? '0deg' :
+                        player.direction === 'RIGHT' ? '90deg' :
+                          player.direction === 'DOWN' ? '180deg' :
+                            '-90deg'
+                      })`,
+                      clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
                     }}
                   />
                 )}
@@ -348,6 +428,17 @@ const GameBoard: React.FC = () => {
               }}
             />
           ))}
+          
+          {yellowDots.map((dot, index) => (
+            <div
+              key={`minimap-yellowdot-${index}`}
+              className="absolute w-1 h-1 rounded-full bg-yellow-500"
+              style={{
+                left: (dot.x * CELL_SIZE * scale),
+                top: (dot.y * CELL_SIZE * scale),
+              }}
+            />
+          ))}
 
           <div
             className="absolute border border-gray-300 dark:border-gray-600"
@@ -356,6 +447,12 @@ const GameBoard: React.FC = () => {
               height: '100%',
             }}
           />
+          
+          {minimapTimeLeft > 0 && (
+            <div className="absolute -top-5 left-0 right-0 text-center text-xs text-gray-600 dark:text-gray-300">
+              Minimap: {minimapTimeLeft}s
+            </div>
+          )}
         </div>
       </div>
     );
@@ -451,7 +548,7 @@ const GameBoard: React.FC = () => {
           <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Speed Boost: {Math.round(speedBoostPercentage)}%
           </div>
-          {isSpeedBoostActive && (
+          {isSpeedBoostActive && speedBoostPercentage > 0 && (
             <div className="text-sm text-blue-500 mt-2 animate-pulse">Speed Boost Active!</div>
           )}
         </div>
@@ -482,6 +579,21 @@ const GameBoard: React.FC = () => {
                 height: '100%',
               }}
             />
+
+            {/* Yellow dots */}
+            {yellowDots.map((dot, index) => (
+              <div
+                key={`yellodot-${index}`}
+                className="absolute rounded-full bg-yellow-500 animate-pulse"
+                style={{
+                  width: CELL_SIZE - 2,
+                  height: CELL_SIZE - 2,
+                  left: dot.x * CELL_SIZE,
+                  top: dot.y * CELL_SIZE,
+                  transform: 'translate3d(0, 0, 0)',
+                }}
+              />
+            ))}
 
             {players.map(player => (
               player.snake.map((segment: Position, index: number) => (
@@ -628,4 +740,3 @@ const GameBoard: React.FC = () => {
 };
 
 export default GameBoard;
- 
