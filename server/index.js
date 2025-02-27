@@ -1,4 +1,3 @@
-
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -287,21 +286,13 @@ wss.on('connection', (ws) => {
           // Remove the yellow dot
           gameState.yellowDots.splice(yellowDotIndex, 1);
           
-          // Get current time left (if any) and add new duration
-          let newDuration = MINIMAP_DURATION;
-          if (player.minimapVisible && player.minimapTimeLeft > 0) {
-            newDuration += player.minimapTimeLeft;
-          }
-          
-          player.minimapTimeLeft = newDuration;
-          player.minimapVisible = true;
-          
-          // Send update to client with new duration and reset flag
+          // Always send a fixed duration of 20 seconds (MINIMAP_DURATION)
+          // Don't add to existing duration
           ws.send(JSON.stringify({
             type: 'minimapUpdate',
             data: { 
               visible: true,
-              duration: newDuration,
+              duration: MINIMAP_DURATION,
               reset: true // Flag to indicate we should reset any existing timer
             }
           }));
