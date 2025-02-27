@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap } from 'lucide-react';
@@ -793,7 +794,7 @@ const GameBoard: React.FC = () => {
 
         <button
           className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-          onClick={()={() => handleDirection('LEFT')}
+          onClick={() => handleDirection('LEFT')}
         >
           <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
         </button>
@@ -806,4 +807,42 @@ const GameBoard: React.FC = () => {
         </button>
 
         <button
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
+          onClick={() => handleDirection('DOWN')}
+        >
+          <ArrowDown className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        </button>
+
+        <button
+          className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${currentPlayer?.speedBoostPercentage > 0
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+            } border-2 border-gray-300 dark:border-gray-600`}
+          onTouchStart={() => {
+            if (currentPlayer?.speedBoostPercentage > 0) setIsSpeedBoostActive(true);
+          }}
+          onTouchEnd={() => setIsSpeedBoostActive(false)}
+        >
+          BOOST
+        </button>
+      </div>
+
+      {gameOver && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[1000]">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center backdrop-blur-md">
+            <h2 className="text-2xl font-bold mb-4 dark:text-white">Game Over</h2>
+            <p className="mb-4 dark:text-gray-300">Final Score: {score}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Play Again
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default GameBoard;
