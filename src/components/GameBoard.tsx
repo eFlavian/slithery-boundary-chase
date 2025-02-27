@@ -48,6 +48,7 @@ const GameBoard: React.FC = () => {
   const minimapTimerRef = useRef<number>();
   const minimapBlinkRef = useRef<number>();
   const reconnectTimerRef = useRef<number>();
+  const countdownIntervalRef = useRef<number>();
 
   const connectToServer = () => {
     // Fix for mobile: Use the current hostname instead of hardcoded localhost
@@ -98,6 +99,9 @@ const GameBoard: React.FC = () => {
           if (minimapBlinkRef.current) {
             clearInterval(minimapBlinkRef.current);
           }
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+          }
           toast.error(`Game Over! ${message.data.message}`);
           break;
           
@@ -110,6 +114,9 @@ const GameBoard: React.FC = () => {
             if (minimapBlinkRef.current) {
               clearInterval(minimapBlinkRef.current);
             }
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current);
+            }
           }
           
           setIsMinimapVisible(message.data.visible);
@@ -117,16 +124,24 @@ const GameBoard: React.FC = () => {
           
           // Start new countdown
           let timeLeft = message.data.duration;
-          const countdownInterval = setInterval(() => {
+          
+          // Clear existing countdown interval if it exists
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+          }
+          
+          countdownIntervalRef.current = window.setInterval(() => {
             timeLeft -= 1;
             setMinimapTimeLeft(timeLeft);
             
             // Start blinking when 3 seconds are left
             if (timeLeft === 3) {
-              let isVisible = true;
+              // Clear any existing blink interval
               if (minimapBlinkRef.current) {
                 clearInterval(minimapBlinkRef.current);
               }
+              
+              let isVisible = true;
               minimapBlinkRef.current = window.setInterval(() => {
                 isVisible = !isVisible;
                 setIsMinimapVisible(isVisible);
@@ -134,7 +149,9 @@ const GameBoard: React.FC = () => {
             }
             
             if (timeLeft <= 0) {
-              clearInterval(countdownInterval);
+              if (countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
+              }
             }
           }, 1000);
           
@@ -143,6 +160,9 @@ const GameBoard: React.FC = () => {
             setIsMinimapVisible(false);
             if (minimapBlinkRef.current) {
               clearInterval(minimapBlinkRef.current);
+            }
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current);
             }
           }, message.data.duration * 1000);
           break;
@@ -298,6 +318,9 @@ const GameBoard: React.FC = () => {
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
       }
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
     };
   }, []);
 
@@ -391,12 +414,13 @@ const GameBoard: React.FC = () => {
     if (!isMinimapVisible) return null;
     
     const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
+    const blinkClass = minimapTimeLeft <= 3 ? "animate-pulse" : "";
 
     return (
       <div 
         style={{ zIndex: 999 }} 
         className={`absolute top-4 right-4 bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-3
-          ${minimapTimeLeft <= 3 ? "animate-pulse" : ""}`}
+          ${blinkClass}`}
       >
         {/* Timer display */}
         <div className="flex items-center justify-between mb-2">
@@ -411,8 +435,8 @@ const GameBoard: React.FC = () => {
             height: MINIMAP_SIZE,
           }}
         >
-          {/* Background grid */}
-          <div className="absolute inset-0 bg-gray-900/60" />
+          {/* Background grid - white background for light mode */}
+          <div className="absolute inset-0 bg-white/90" />
 
           {/* Game elements */}
           {players.map(player => {
@@ -427,7 +451,7 @@ const GameBoard: React.FC = () => {
                 {isCurrentPlayer ? (
                   <>
                     <div
-                      className="absolute -translate-x-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap text-blue-400 font-medium"
+                      className="absolute -translate-x-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap text-blue-600 font-medium"
                       style={{
                         left: (player.snake[0].x * CELL_SIZE * scale),
                         top: (player.snake[0].y * CELL_SIZE * scale) - 10,
@@ -436,7 +460,7 @@ const GameBoard: React.FC = () => {
                       {player.name}
                     </div>
                     <div
-                      className="absolute w-3 h-3 bg-blue-500"
+                      className="absolute w-3 h-3 bg-blue-600"
                       style={{
                         left: (player.snake[0].x * CELL_SIZE * scale),
                         top: (player.snake[0].y * CELL_SIZE * scale),
@@ -451,7 +475,7 @@ const GameBoard: React.FC = () => {
                   </>
                 ) : (
                   <div
-                    className="absolute w-3 h-3 bg-red-500/80"
+                    className="absolute w-3 h-3 bg-red-600"
                     style={{
                       left: (player.snake[0].x * CELL_SIZE * scale),
                       top: (player.snake[0].y * CELL_SIZE * scale),
@@ -472,7 +496,7 @@ const GameBoard: React.FC = () => {
             <div
               key={`minimap-food-${index}`}
               className={`absolute w-1 h-1 rounded-full ${
-                food.type === 'special' ? 'bg-purple-500/80' : 'bg-red-500/80'
+                food.type === 'special' ? 'bg-purple-600' : 'bg-red-600'
               }`}
               style={{
                 left: (food.x * CELL_SIZE * scale),
@@ -484,7 +508,7 @@ const GameBoard: React.FC = () => {
           {yellowDots.map((dot, index) => (
             <div
               key={`minimap-yellowdot-${index}`}
-              className="absolute w-1 h-1 rounded-full bg-yellow-500/80"
+              className="absolute w-1 h-1 rounded-full bg-yellow-600"
               style={{
                 left: (dot.x * CELL_SIZE * scale),
                 top: (dot.y * CELL_SIZE * scale),
@@ -492,11 +516,11 @@ const GameBoard: React.FC = () => {
             />
           ))}
 
-          {/* Grid overlay */}
+          {/* Grid overlay - darker gray for better visibility on white background */}
           <div
-            className="absolute inset-0 opacity-10"
+            className="absolute inset-0 opacity-20"
             style={{
-              backgroundImage: 'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)',
+              backgroundImage: 'linear-gradient(to right, #333 1px, transparent 1px), linear-gradient(to bottom, #333 1px, transparent 1px)',
               backgroundSize: `${MINIMAP_SIZE / 10}px ${MINIMAP_SIZE / 10}px`
             }}
           />

@@ -1,3 +1,4 @@
+
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -22,6 +23,7 @@ const INITIAL_YELLOW_DOTS = 5;
 const FOOD_SPAWN_INTERVAL = 5000;
 const PORTAL_SPAWN_INTERVAL = 20000;
 const YELLOW_DOT_SPAWN_INTERVAL = 60000;
+const MINIMAP_DURATION = 20; // Changed from 10 to 20 seconds
 
 function getRandomPosition() {
   return {
@@ -186,7 +188,8 @@ wss.on('connection', (ws) => {
     speedBoostPercentage: 0,
     isPlaying: false,
     minimapVisible: false,
-    minimapTimer: null
+    minimapTimer: null,
+    minimapTimeLeft: 0 // Track time left on minimap
   });
 
   ws.send(JSON.stringify({
@@ -281,14 +284,25 @@ wss.on('connection', (ws) => {
         );
 
         if (yellowDotIndex !== -1) {
+          // Remove the yellow dot
           gameState.yellowDots.splice(yellowDotIndex, 1);
           
+          // Get current time left (if any) and add new duration
+          let newDuration = MINIMAP_DURATION;
+          if (player.minimapVisible && player.minimapTimeLeft > 0) {
+            newDuration += player.minimapTimeLeft;
+          }
+          
+          player.minimapTimeLeft = newDuration;
+          player.minimapVisible = true;
+          
+          // Send update to client with new duration and reset flag
           ws.send(JSON.stringify({
             type: 'minimapUpdate',
             data: { 
               visible: true,
-              duration: 10,
-              reset: true
+              duration: newDuration,
+              reset: true // Flag to indicate we should reset any existing timer
             }
           }));
         }
