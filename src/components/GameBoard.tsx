@@ -1,7 +1,7 @@
-
+<lov-code>
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap, Map } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
 type Position = {
@@ -710,11 +710,11 @@ const GameBoard: React.FC = () => {
               }}
             />
 
-            {/* Yellow dots */}
+            {/* Yellow dots with map icon */}
             {yellowDots.map((dot, index) => (
               <div
                 key={`yellodot-${index}`}
-                className="absolute rounded-full bg-yellow-500 animate-pulse"
+                className="absolute rounded-full bg-yellow-500 animate-pulse flex items-center justify-center"
                 style={{
                   width: CELL_SIZE - 2,
                   height: CELL_SIZE - 2,
@@ -722,7 +722,9 @@ const GameBoard: React.FC = () => {
                   top: dot.y * CELL_SIZE,
                   transform: 'translate3d(0, 0, 0)',
                 }}
-              />
+              >
+                <Map className="w-2 h-2 text-white" />
+              </div>
             ))}
 
             {players.map(player => (
@@ -790,10 +792,11 @@ const GameBoard: React.FC = () => {
               />
             ))}
 
+            {/* Portals with lightning icon */}
             {portals.map((portal, index) => (
               <div
                 key={`portal-${index}`}
-                className="absolute bg-blue-500 rounded-full animate-pulse will-change-transform"
+                className="absolute bg-blue-500 rounded-full animate-pulse will-change-transform flex items-center justify-center"
                 style={{
                   width: CELL_SIZE,
                   height: CELL_SIZE,
@@ -802,7 +805,9 @@ const GameBoard: React.FC = () => {
                   boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)',
                   transform: 'translate3d(0, 0, 0)',
                 }}
-              />
+              >
+                <Zap className="w-2 h-2 text-white" />
+              </div>
             ))}
           </div>
         </div>
@@ -818,61 +823,4 @@ const GameBoard: React.FC = () => {
 
         <button
           className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-          onClick={() => handleDirection('LEFT')}
-        >
-          <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-        </button>
-
-        <button
-          className="absolute right-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-          onClick={() => handleDirection('RIGHT')}
-        >
-          <ArrowRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-        </button>
-
-        <button
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-          onClick={() => handleDirection('DOWN')}
-        >
-          <ArrowDown className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-        </button>
-
-        <button
-          className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${currentPlayer?.speedBoostPercentage > 0
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
-            } border-2 border-gray-300 dark:border-gray-600`}
-          onTouchStart={() => {
-            if (currentPlayer?.speedBoostPercentage > 0) setIsSpeedBoostActive(true);
-          }}
-          onTouchEnd={() => setIsSpeedBoostActive(false)}
-        >
-          BOOST
-        </button>
-      </div>
-
-      {gameOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-[1000]">
-          <div className="bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-6 max-w-sm w-full text-center">
-            <h2 className="text-2xl font-bold mb-4 text-white">Game Over</h2>
-            <div className="flex justify-center items-center space-x-2 mb-6">
-              <Trophy className="w-5 h-5 text-yellow-400" />
-              <p className="text-white text-xl font-semibold">Score: {score}</p>
-            </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Play className="w-4 h-4" />
-                Play Again
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default GameBoard;
+          onClick={() => handle
