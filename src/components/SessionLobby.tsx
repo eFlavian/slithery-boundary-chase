@@ -91,7 +91,10 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
     } else if (countdown === 0) {
       // When countdown reaches 0, directly trigger game start
       console.log("Countdown reached 0, starting game now");
-      onGameStart(); // This will immediately start the game
+      // Force gameStarting to true to prevent duplicate triggers
+      setGameStarting(true);
+      // Directly call onGameStart to bypass any potential issues
+      onGameStart(); 
     }
   }, [countdown, onGameStart]);
 
@@ -100,7 +103,8 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
     if (sessionState?.gameStarted && !gameStarting) {
       console.log("Game marked as started in session state, starting game now");
       setGameStarting(true);
-      onGameStart(); // This will immediately start the game
+      // Ensure we call onGameStart directly
+      onGameStart();
     }
   }, [sessionState?.gameStarted, onGameStart, gameStarting]);
 

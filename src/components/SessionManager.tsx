@@ -37,7 +37,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Establish WebSocket connection
   useEffect(() => {
     const connectWebSocket = () => {
       const ws = new WebSocket(wsUrl);
@@ -53,7 +52,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
         setWsConnection(null);
         console.log("WebSocket connection closed");
         
-        // Auto reconnect after delay
         setTimeout(connectWebSocket, 3000);
       });
       
@@ -78,7 +76,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
     };
   }, [wsUrl, toast]);
 
-  // Handle incoming WebSocket messages
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       try {
@@ -95,7 +92,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
               title: "Session Created!",
               description: `Session code: ${data.data.joinCode}`
             });
-            // Explicitly set that the player is NOT ready when creating a session
             if (playerId && wsConnection) {
               wsConnection.send(JSON.stringify({
                 type: 'setReady',
@@ -110,7 +106,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
               title: "Joined Session!",
               description: `Session code: ${data.data.joinCode}`
             });
-            // Explicitly set that the player is NOT ready when joining a session
             if (playerId && wsConnection) {
               wsConnection.send(JSON.stringify({
                 type: 'setReady',
@@ -122,7 +117,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
             
           case 'sessionState':
             setSessionState(data.data);
-            // Check if game is marked as started
             if (data.data.gameStarted) {
               console.log("Game marked as started in sessionState");
               onGameStart();
@@ -176,7 +170,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
     );
   }
 
-  // Show session lobby if in a session
   if (sessionState) {
     return (
       <div className="container mx-auto p-4">
@@ -192,7 +185,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
     );
   }
 
-  // Show session creation/joining interface
   return (
     <div className="container mx-auto p-4">
       <Tabs defaultValue="create" value={activeTab} onValueChange={setActiveTab}>
