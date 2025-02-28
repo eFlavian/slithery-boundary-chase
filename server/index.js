@@ -1,4 +1,3 @@
-
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -12,6 +11,9 @@ const wss = new WebSocketServer({ server });
 const sessions = new Map(); // Store active game sessions
 const clientToSession = new Map(); // Map clients to their sessions
 const sessionCodes = new Map(); // Map session codes to session IDs for faster lookup
+
+// Track connected clients
+const connectedClients = new Map();
 
 // Game state per session
 const getNewGameState = () => ({
@@ -278,22 +280,22 @@ function broadcastGameState(sessionId) {
   const playersArray = Array.from(session.players.values()).map(player => ({
     id: player.id,
     name: player.name,
-    snake: player.snake,
+    snake: player.snake || [], // Ensure snake is always an array
     direction: player.direction,
-    score: player.score,
-    speedBoostPercentage: player.speedBoostPercentage,
-    isPlaying: player.isPlaying,
-    minimapVisible: player.minimapVisible,
-    minimapTimer: player.minimapTimer,
+    score: player.score || 0,
+    speedBoostPercentage: player.speedBoostPercentage || 0,
+    isPlaying: player.isPlaying || false,
+    minimapVisible: player.minimapVisible || false,
+    minimapTimer: player.minimapTimer || null,
     isReady: session.readyPlayers.has(player.id)
   }));
 
   const state = {
     players: playersArray,
-    foods: session.foods,
-    yellowDots: session.yellowDots,
-    portals: session.portals,
-    isActive: session.isActive,
+    foods: session.foods || [],
+    yellowDots: session.yellowDots || [],
+    portals: session.portals || [],
+    isActive: session.isActive || false,
     hostId: session.hostId,
     code: session.code
   };
@@ -324,15 +326,24 @@ function checkAllPlayersReady(sessionId) {
 
 // Handle player connection
 wss.on('connection', (ws) => {
+  // Generate a unique ID for this client
   const clientId = uuidv4();
   ws.id = clientId;
   
+  // Add to connected clients map
+  connectedClients.set(clientId, ws);
+  
   console.log(`Client connected: ${clientId}`);
   
-  ws.send(JSON.stringify({
-    type: 'init',
-    data: { clientId }
-  }));
+  // Send initial message with client ID
+  try {
+    ws.send(JSON.stringify({
+      type: 'init',
+      data: { clientId }
+    }));
+  } catch (err) {
+    console.error(`Error sending init message to client ${clientId}:`, err);
+  }
 
   ws.on('message', (message) => {
     try {
@@ -374,6 +385,7 @@ wss.on('connection', (ws) => {
           break;
           
         case 'joinSession':
+          console.log(`Client ${clientId} attempting to join session with code ${data.sessionCode}`);
           const joinedSession = joinSession(data.sessionCode, clientId);
           
           if (joinedSession) {
@@ -403,6 +415,7 @@ wss.on('connection', (ws) => {
             
             broadcastGameState(joinedSession.id);
           } else {
+            console.log(`Session not found for code: ${data.sessionCode}`);
             ws.send(JSON.stringify({
               type: 'error',
               data: { message: 'Session not found' }
@@ -674,6 +687,11 @@ wss.on('connection', (ws) => {
             data: { sessions: activeSessions }
           }));
           break;
+          
+        case 'ping':
+          // Respond with pong to keep connection alive
+          ws.send(JSON.stringify({ type: 'pong' }));
+          break;
       }
       
       // Broadcast updated game state if in a session
@@ -685,8 +703,11 @@ wss.on('connection', (ws) => {
     }
   });
 
-  ws.on('close', () => {
-    console.log(`Client disconnected: ${clientId}`);
+  ws.on('close', (code, reason) => {
+    console.log(`Client disconnected: ${clientId}, code: ${code}, reason: ${reason || 'No reason provided'}`);
+    
+    // Remove from connected clients
+    connectedClients.delete(clientId);
     
     // Get session for this client
     const sessionId = clientToSession.get(clientId);
@@ -765,6 +786,28 @@ wss.on('connection', (ws) => {
     // Remove client mappings
     clientToSession.delete(clientId);
   });
+  
+  // Set a ping timeout to detect dead connections
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
+});
+
+// Heartbeat to check for dead connections
+const interval = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) {
+      return ws.terminate();
+    }
+    
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+
+wss.on('close', () => {
+  clearInterval(interval);
 });
 
 // Periodically clean up old inactive sessions
@@ -777,6 +820,11 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000); // Every 5 minutes
+
+// Serve static files for basic health check
+app.get('/', (req, res) => {
+  res.status(200).send('Server is running');
+});
 
 server.listen(3001, () => {
   console.log('WebSocket server is running on ws://localhost:3001');

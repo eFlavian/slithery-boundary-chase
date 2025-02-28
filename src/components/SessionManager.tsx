@@ -26,6 +26,9 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
   const [clientId, setClientId] = useState<string | null>(null);
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
   const [joinCodeFromUrl, setJoinCodeFromUrl] = useState<string | null>(null);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const reconnectTimerRef = React.useRef<number | null>(null);
+  const hasTriedJoinRef = React.useRef<boolean>(false);
 
   useEffect(() => {
     // Check if there's a join code in the URL
@@ -40,20 +43,21 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
 
   useEffect(() => {
     // Connect to WebSocket server
+    if (wsConnection) return; // Prevent multiple connections
+    
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
     const wsUrl = `${protocol}//${wsHost}`;
     
+    console.log(`Connecting to WebSocket server at: ${wsUrl}`);
+    
     const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
+      console.log('WebSocket connection opened');
       setIsConnected(true);
       setWsConnection(ws);
-      
-      // If we have a join code from URL and we're now connected, try to auto-join
-      if (joinCodeFromUrl && playerName.trim()) {
-        handleJoinSession(joinCodeFromUrl);
-      }
+      setReconnectAttempts(0);
     };
     
     ws.onmessage = (event) => {
@@ -61,15 +65,25 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
       
       switch (message.type) {
         case 'init':
+          console.log('Received init with client ID:', message.data.clientId);
           setClientId(message.data.clientId);
+          
+          // If we have a join code from URL and we're now initialized with an ID, 
+          // we can try to auto-join once (and if playerName is set)
+          if (joinCodeFromUrl && playerName.trim() && !hasTriedJoinRef.current) {
+            console.log('Attempting to auto-join with code:', joinCodeFromUrl);
+            hasTriedJoinRef.current = true;
+            handleJoinSession(joinCodeFromUrl);
+          }
           break;
           
         case 'sessionCreated':
         case 'sessionJoined':
+          console.log('Session joined/created:', message.data);
           onJoinSession({
             ...message.data,
             playerName,
-            clientId: clientId,
+            clientId: message.data.clientId || clientId,
             ws: ws
           });
           setLoading(false);
@@ -83,35 +97,59 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
         case 'error':
           toast.error(message.data.message);
           setLoading(false);
+          hasTriedJoinRef.current = false; // Reset so we can try again
           break;
       }
     };
     
-    ws.onerror = () => {
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
       toast.error('Failed to connect to game server');
       setIsConnected(false);
       setLoading(false);
-    };
-    
-    ws.onclose = () => {
-      setIsConnected(false);
       setWsConnection(null);
     };
     
-    return () => {
-      ws.close();
+    ws.onclose = (event) => {
+      console.log('WebSocket connection closed:', event.code, event.reason);
+      setIsConnected(false);
+      setWsConnection(null);
+      
+      // Only attempt to reconnect if it wasn't a normal closure
+      if (event.code !== 1000 && event.code !== 1001) {
+        // Attempt to reconnect with exponential backoff
+        if (reconnectAttempts < 3) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+          console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
+          
+          if (reconnectTimerRef.current) {
+            window.clearTimeout(reconnectTimerRef.current);
+          }
+          
+          reconnectTimerRef.current = window.setTimeout(() => {
+            setReconnectAttempts(prev => prev + 1);
+            setWsConnection(null); // Clear the connection to allow a new one
+          }, delay);
+        }
+      }
     };
-  }, [onJoinSession, playerName, joinCodeFromUrl, clientId]);
-  
-  // Auto-attempt to join when clientId is set and we have a joinCodeFromUrl
-  useEffect(() => {
-    if (isConnected && clientId && joinCodeFromUrl && playerName.trim() && !loading) {
-      handleJoinSession(joinCodeFromUrl);
-    }
-  }, [clientId, isConnected, joinCodeFromUrl, playerName]);
+    
+    return () => {
+      if (reconnectTimerRef.current) {
+        window.clearTimeout(reconnectTimerRef.current);
+      }
+      
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        console.log('Closing WebSocket connection on cleanup');
+        ws.close();
+      }
+    };
+  }, [onJoinSession, reconnectAttempts, wsConnection, joinCodeFromUrl, playerName]);
   
   // Refresh the session list periodically
   useEffect(() => {
+    if (!wsConnection || !isConnected) return;
+    
     const fetchSessions = () => {
       if (wsConnection && isConnected) {
         wsConnection.send(JSON.stringify({
@@ -146,6 +184,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
     }
     
     setLoading(true);
+    console.log('Sending join session request for code:', codeToUse);
     wsConnection?.send(JSON.stringify({
       type: 'joinSession',
       sessionCode: codeToUse,
