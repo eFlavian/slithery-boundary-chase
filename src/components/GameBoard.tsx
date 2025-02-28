@@ -53,7 +53,7 @@ interface GameBoardProps {
 const GRID_SIZE = 256;
 const CELL_SIZE = 15;
 const INITIAL_SPEED = 140;
-const CAMERA_SMOOTHING = 0.55;
+const CAMERA_SMOOTHING = 0.2; // Reduced for faster camera movement
 const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
 const INACTIVE_PLAYER_OPACITY = 0.2;
@@ -83,8 +83,21 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   const minimapTimerRef = useRef<number>();
   const minimapBlinkRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
-  const isCameraInitializedRef = useRef<boolean>(false);
   const gameContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Camera state tracking
+  const [cameraResetNeeded, setCameraResetNeeded] = useState(true);
+
+  // Debug function to print current camera state
+  const logCameraInfo = (message: string, position?: Position) => {
+    console.log(`Camera Debug [${message}]: `, {
+      playerPosition: position, 
+      cameraPosition: cameraPositionRef.current,
+      isPlaying,
+      gameOver,
+      resetNeeded: cameraResetNeeded
+    });
+  };
 
   useEffect(() => {
     const ws = sessionData.ws;
@@ -156,12 +169,27 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setIsPlaying(true);
           setGameOver(false);
           setIsReady(false);
-          isCameraInitializedRef.current = false; // Reset camera initialization flag
+          setCameraResetNeeded(true); // Mark that we need to reset camera
           
-          // Ensure we get the latest game state to position camera correctly
+          // Request state immediately and continuously for better tracking
           ws.send(JSON.stringify({
             type: 'requestGameState'
           }));
+          
+          // Set up more frequent updates for a short time to ensure we position correctly
+          const quickUpdateTimer = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'requestGameState'
+              }));
+            }
+          }, 100); // Request updates every 100ms initially
+          
+          // Clear quick updates after 2 seconds
+          setTimeout(() => {
+            clearInterval(quickUpdateTimer);
+          }, 2000);
+          
           toast.success('Game started!');
           break;
           
@@ -238,7 +266,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           type: 'requestGameState'
         }));
       }
-    }, 2000); // Poll every 2 seconds
+    }, 1000); // Poll every second for smoother tracking
 
     return () => {
       if (gameLoop.current) {
@@ -435,88 +463,82 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
 
-  const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
+  const lerp = (start: number, end: number, t: number) => {
+    return start + (end - start) * t;
+  };
 
-  const getViewportTransform = (snakeHead: Position) => {
+  // Function to center camera on a position
+  const centerCameraOn = (position: Position, instant = false) => {
+    if (!gameContainerRef.current) return;
+    
     const containerWidth = window.innerWidth;
     const containerHeight = window.innerHeight;
 
     const viewportCenterX = containerWidth / 2;
     const viewportCenterY = containerHeight / 2;
 
-    const targetX = viewportCenterX - (snakeHead.x * CELL_SIZE);
-    const targetY = viewportCenterY - (snakeHead.y * CELL_SIZE);
-
-    const now = performance.now();
-    const deltaTime = now - lastUpdateTime.current;
-    lastUpdateTime.current = now;
-
-    // Adjust smoothing based on whether this is initial positioning or ongoing tracking
-    const smoothing = isCameraInitializedRef.current 
-      ? 1 - Math.exp(-CAMERA_SMOOTHING * (deltaTime / 1000))  // Normal smoothing for ongoing tracking
-      : 1; // No smoothing (instant jump) for initial positioning
-
-    cameraPositionRef.current.x = lerp(cameraPositionRef.current.x, targetX, smoothing);
-    cameraPositionRef.current.y = lerp(cameraPositionRef.current.y, targetY, smoothing);
-
-    return `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
+    const targetX = viewportCenterX - (position.x * CELL_SIZE);
+    const targetY = viewportCenterY - (position.y * CELL_SIZE);
+    
+    if (instant) {
+      // Immediately set camera position without smoothing
+      cameraPositionRef.current = { x: targetX, y: targetY };
+      gameContainerRef.current.style.transform = `translate3d(${Math.round(targetX)}px, ${Math.round(targetY)}px, 0)`;
+      logCameraInfo("Instant camera position set", position);
+    } else {
+      // Apply smoothing
+      const now = performance.now();
+      const deltaTime = Math.min(33, now - lastUpdateTime.current); // Cap max delta time
+      lastUpdateTime.current = now;
+      
+      const smoothing = 1 - Math.exp(-CAMERA_SMOOTHING * (deltaTime / 1000));
+      
+      cameraPositionRef.current.x = lerp(cameraPositionRef.current.x, targetX, smoothing);
+      cameraPositionRef.current.y = lerp(cameraPositionRef.current.y, targetY, smoothing);
+      
+      gameContainerRef.current.style.transform = `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
+    }
   };
 
-  // Reset camera position when game starts
+  // Update the camera position when current player's snake moves
   useEffect(() => {
-    if (isPlaying && !isCameraInitializedRef.current) {
-      // Request fresh game state when game starts to ensure we have latest player positions
-      sessionData.ws.send(JSON.stringify({
-        type: 'requestGameState'
-      }));
-    }
-  }, [isPlaying, sessionData.ws]);
-
-  // Update camera when current player changes (including their snake position)
-  useEffect(() => {
-    if (!currentPlayer?.snake?.[0]) return;
+    if (!isPlaying || !currentPlayer?.snake?.[0]) return;
     
-    // If game is playing and camera not initialized, set initial position
-    if (isPlaying && !isCameraInitializedRef.current) {
-      const containerWidth = window.innerWidth;
-      const containerHeight = window.innerHeight;
-
-      // Immediately set camera to current player position without smoothing
-      cameraPositionRef.current = {
-        x: containerWidth / 2 - (currentPlayer.snake[0].x * CELL_SIZE),
-        y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
-      };
-      
-      if (gameContainerRef.current) {
-        gameContainerRef.current.style.transform = `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
-      }
-      
-      isCameraInitializedRef.current = true;
-      console.log("Camera initialized to player position:", currentPlayer.snake[0]);
+    if (cameraResetNeeded) {
+      // Instant reset when camera reset is needed
+      centerCameraOn(currentPlayer.snake[0], true);
+      setCameraResetNeeded(false);
+      logCameraInfo("Camera hard reset", currentPlayer.snake[0]);
     }
-  }, [currentPlayer, isPlaying]);
+  }, [currentPlayer, isPlaying, cameraResetNeeded]);
 
-  // Main camera update loop
+  // Set up continuous camera updates via requestAnimationFrame
   useEffect(() => {
-    lastUpdateTime.current = performance.now(); // Initialize the last update time
+    lastUpdateTime.current = performance.now();
+    let frameId: number;
     
-    const updateCameraFrame = () => {
-      if (isPlaying && currentPlayer?.snake?.[0] && gameContainerRef.current) {
-        gameContainerRef.current.style.transform = getViewportTransform(currentPlayer.snake[0]);
+    const updateFrame = () => {
+      if (isPlaying && !gameOver && currentPlayer?.snake?.[0]) {
+        centerCameraOn(currentPlayer.snake[0]);
       }
-      
-      animationFrameRef.current = requestAnimationFrame(updateCameraFrame);
+      frameId = requestAnimationFrame(updateFrame);
     };
     
-    // Start the animation frame loop
-    animationFrameRef.current = requestAnimationFrame(updateCameraFrame);
+    frameId = requestAnimationFrame(updateFrame);
     
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      cancelAnimationFrame(frameId);
     };
-  }, []);
+  }, [isPlaying, gameOver, currentPlayer]);
+
+  // Reset camera position when game state changes
+  useEffect(() => {
+    // Reset camera when game starts
+    if (isPlaying) {
+      setCameraResetNeeded(true);
+      logCameraInfo("Camera reset triggered - game started");
+    }
+  }, [isPlaying]);
 
   const renderMinimap = () => {
     if (!isMinimapVisible) return null;
@@ -852,6 +874,25 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
 
+  // Button to force reset camera (for debugging or if camera gets stuck)
+  const renderForceResetButton = () => {
+    if (!isPlaying) return null;
+    
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          setCameraResetNeeded(true);
+          logCameraInfo("Manual camera reset triggered");
+        }}
+        className="absolute bottom-20 left-4 bg-black/40 backdrop-blur-md border-white/20 text-white z-[999]"
+      >
+        Reset Camera
+      </Button>
+    );
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <button
@@ -873,6 +914,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       {renderSpeedBoost()}
       {renderCountdown()}
       {renderWinner()}
+      {renderForceResetButton()}
 
       <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="relative w-full h-full">
@@ -884,7 +926,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
               transform: 'translate3d(0, 0, 0)',
-              willChange: 'transform'
+              willChange: 'transform',
+              transformStyle: 'preserve-3d'
             }}
           >
             <div
