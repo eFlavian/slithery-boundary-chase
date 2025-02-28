@@ -79,6 +79,7 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
       return () => clearTimeout(timer);
     } else if (countdown === 0) {
       // When countdown reaches 0, directly trigger game start
+      console.log("Countdown reached 0, starting game");
       onGameStart();
     }
   }, [countdown, onGameStart]);
