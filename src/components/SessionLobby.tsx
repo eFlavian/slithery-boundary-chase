@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,13 +45,22 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
 
   const isHost = sessionState?.host === playerId;
   const isReady = sessionState?.players.find(p => p.id === playerId)?.isReady || false;
-  const allReady = sessionState?.players.every(p => p.isReady) || false;
+  const allPlayersReady = sessionState?.players.every(p => p.isReady) || false;
+  const hasMultiplePlayers = sessionState?.players.length > 1 || false;
   const [countdown, setCountdown] = useState<number | null>(null);
   const [gameStarting, setGameStarting] = useState(false);
 
   // Watch for all players ready condition
   useEffect(() => {
-    if (sessionState && allReady && isHost && !sessionState.gameStarted && !gameStarting && sessionState.players.length > 0) {
+    if (
+      sessionState && 
+      allPlayersReady && 
+      isHost && 
+      !sessionState.gameStarted && 
+      !gameStarting && 
+      hasMultiplePlayers
+    ) {
+      console.log("All players ready and multiple players present, starting countdown");
       // Host sends start game signal when all players are ready
       wsConnection?.send(JSON.stringify({
         type: 'startGame',
@@ -66,7 +76,7 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
       setGameStarting(true);
       setCountdown(3);
     }
-  }, [allReady, isHost, playerId, sessionState, wsConnection, toast, gameStarting]);
+  }, [allPlayersReady, isHost, playerId, sessionState, wsConnection, toast, gameStarting, hasMultiplePlayers]);
 
   // Handle countdown timer
   useEffect(() => {
@@ -80,7 +90,7 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
       return () => clearTimeout(timer);
     } else if (countdown === 0) {
       // When countdown reaches 0, directly trigger game start
-      console.log("Countdown reached 0, starting game");
+      console.log("Countdown reached 0, starting game now");
       onGameStart(); // This will immediately start the game
     }
   }, [countdown, onGameStart]);
@@ -88,7 +98,7 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
   // Check if game has started from the server
   useEffect(() => {
     if (sessionState?.gameStarted && !gameStarting) {
-      console.log("Game marked as started in session state, starting game");
+      console.log("Game marked as started in session state, starting game now");
       setGameStarting(true);
       onGameStart(); // This will immediately start the game
     }

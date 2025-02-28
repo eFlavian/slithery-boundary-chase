@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -126,7 +125,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
             // Check if game is marked as started
             if (data.data.gameStarted) {
               console.log("Game marked as started in sessionState");
-              // If game is started, directly trigger the game start
               onGameStart();
             }
             break;
