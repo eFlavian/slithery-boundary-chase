@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap, Map, Copy, X, CheckCircle, Users, Home } from 'lucide-react';
@@ -85,7 +84,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   const countdownIntervalRef = useRef<number>();
 
   useEffect(() => {
-    // Set up message handlers
     const ws = sessionData.ws;
     
     ws.onmessage = (event) => {
@@ -134,7 +132,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setCountdown(message.data.countdown);
           toast.info(`Game starting in ${message.data.countdown} seconds!`);
           
-          // Countdown timer
           let count = message.data.countdown;
           const countdownTimer = setInterval(() => {
             count--;
@@ -163,7 +160,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           break;
           
         case 'minimapUpdate':
-          // Clear any existing timers if this is a reset
           if (message.data.reset) {
             if (minimapTimerRef.current) {
               clearTimeout(minimapTimerRef.current);
@@ -179,10 +175,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setIsMinimapVisible(message.data.visible);
           setMinimapTimeLeft(message.data.duration);
           
-          // Start new countdown
           let timeLeft = message.data.duration;
           
-          // Clear existing countdown interval if it exists
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
@@ -191,9 +185,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
             timeLeft -= 1;
             setMinimapTimeLeft(timeLeft);
             
-            // Start blinking when 3 seconds are left
             if (timeLeft === 3) {
-              // Clear any existing blink interval
               if (minimapBlinkRef.current) {
                 clearInterval(minimapBlinkRef.current);
               }
@@ -212,7 +204,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
             }
           }, 1000);
           
-          // Set timeout to stop the minimap visibility
           minimapTimerRef.current = window.setTimeout(() => {
             setIsMinimapVisible(false);
             if (minimapBlinkRef.current) {
@@ -227,7 +218,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     };
 
     return () => {
-      // Clean up when unmounting
       if (gameLoop.current) {
         clearInterval(gameLoop.current);
       }
@@ -399,7 +389,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   const allPlayersReady = players.length > 0 && players.every(p => p.isReady);
   const canStartGame = isHost && allPlayersReady && !isGameActive;
 
-  // Remaining component functions (createHashPattern, lerp, getViewportTransform, etc.)
   const createHashPattern = () => {
     return (
       <div className="absolute inset-0 w-full h-full" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
@@ -486,7 +475,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
         className={`absolute top-4 right-4 bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-3
           ${blinkClass}`}
       >
-        {/* Timer display */}
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs text-white/70 font-medium">Minimap</div>
           <div className="text-xs text-white/90 font-semibold">{minimapTimeLeft}s</div>
@@ -499,10 +487,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
             height: MINIMAP_SIZE,
           }}
         >
-          {/* Background grid - white background for light mode */}
           <div className="absolute inset-0 bg-white/90" />
-
-          {/* Game elements */}
           {players.map(player => {
             const isCurrentPlayer = player.id === sessionData.clientId;
             if (!player.snake?.[0]) return null;
@@ -580,7 +565,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
             />
           ))}
 
-          {/* Grid overlay - darker gray for better visibility on white background */}
           <div
             className="absolute inset-0 opacity-20"
             style={{
@@ -593,7 +577,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
 
-  // Player Score UI
   const renderPlayerScore = () => {
     if (!isPlaying) return null;
     
@@ -607,9 +590,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
 
-  // Leaderboard UI
   const renderLeaderboard = () => {
-    // Only show top 10 players
     const topPlayers = [...players]
       .sort((a, b) => b.score - a.score)
       .slice(0, 10);
@@ -657,7 +638,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
 
-  // Speed Boost UI
   const renderSpeedBoost = () => {
     if (!isPlaying) return null;
     
@@ -678,12 +658,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
               style={{ height: `${speedBoostPercentage}%` }}
             />
             
-            {/* Boost level markers */}
-            <div className="absolute inset-0 flex flex-col justify-between py-2 pointer-events-none">
-              {[0, 1, 2, 3, 4].map((_, i) => (
-                <div key={i} className="w-full h-px bg-white/20" />
-              ))}
-            </div>
+            {[0, 1, 2, 3, 4].map((_, i) => (
+              <div key={i} className="w-full h-px bg-white/20" />
+            ))}
           </div>
           
           <div className="text-xs text-white text-center">
@@ -698,7 +675,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
   
-  // Session Info UI
   const renderSessionInfo = () => {
     if (isGameActive) return null;
     
@@ -775,7 +751,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
   
-  // Countdown UI
   const renderCountdown = () => {
     if (countdown === null) return null;
     
@@ -788,7 +763,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
   
-  // Winner Announcement
   const renderWinner = () => {
     if (!winner) return null;
     
@@ -807,7 +781,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
   
-  // Leave Game Button
   const renderLeaveButton = () => {
     if (isGameActive) return null;
     
@@ -872,7 +845,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
               }}
             />
 
-            {/* Yellow dots with map icon */}
             {yellowDots.map((dot, index) => (
               <div
                 key={`yellodot-${index}`}
@@ -954,7 +926,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
               />
             ))}
 
-            {/* Portals with lightning icon */}
             {portals.map((portal, index) => (
               <div
                 key={`portal-${index}`}

@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,6 +16,9 @@ interface SessionManagerProps {
   onJoinSession: (sessionData: any) => void;
 }
 
+// Keep a global reference to the WebSocket so we can avoid creating multiple connections
+let globalWsConnection: WebSocket | null = null;
+
 const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
   const [playerName, setPlayerName] = useState('');
   const [sessionCode, setSessionCode] = useState('');
@@ -24,11 +26,32 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
   const [loading, setLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [clientId, setClientId] = useState<string | null>(null);
-  const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
   const [joinCodeFromUrl, setJoinCodeFromUrl] = useState<string | null>(null);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
-  const reconnectTimerRef = React.useRef<number | null>(null);
-  const hasTriedJoinRef = React.useRef<boolean>(false);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const hasTriedJoinRef = useRef<boolean>(false);
+  const isComponentMountedRef = useRef<boolean>(true);
+  const pingIntervalRef = useRef<number | null>(null);
+
+  // On component mount
+  useEffect(() => {
+    isComponentMountedRef.current = true;
+    
+    return () => {
+      isComponentMountedRef.current = false;
+      
+      // Clear any intervals on unmount
+      if (reconnectTimerRef.current) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      
+      if (pingIntervalRef.current) {
+        window.clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Check if there's a join code in the URL
@@ -42,117 +65,166 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
   }, []);
 
   useEffect(() => {
-    // Connect to WebSocket server
-    if (wsConnection) return; // Prevent multiple connections
+    // Connect to WebSocket server, but only if we don't already have a connection
+    if (globalWsConnection && globalWsConnection.readyState !== WebSocket.CLOSED) {
+      // If we already have a connection that's not closed, use it
+      setIsConnected(globalWsConnection.readyState === WebSocket.OPEN);
+      return;
+    }
     
+    // No existing connection or it's closed, create a new one
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
     const wsUrl = `${protocol}//${wsHost}`;
     
     console.log(`Connecting to WebSocket server at: ${wsUrl}`);
     
-    const ws = new WebSocket(wsUrl);
-    
-    ws.onopen = () => {
-      console.log('WebSocket connection opened');
-      setIsConnected(true);
-      setWsConnection(ws);
-      setReconnectAttempts(0);
-    };
-    
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
+    try {
+      const ws = new WebSocket(wsUrl);
+      globalWsConnection = ws;
       
-      switch (message.type) {
-        case 'init':
-          console.log('Received init with client ID:', message.data.clientId);
-          setClientId(message.data.clientId);
-          
-          // If we have a join code from URL and we're now initialized with an ID, 
-          // we can try to auto-join once (and if playerName is set)
-          if (joinCodeFromUrl && playerName.trim() && !hasTriedJoinRef.current) {
-            console.log('Attempting to auto-join with code:', joinCodeFromUrl);
-            hasTriedJoinRef.current = true;
-            handleJoinSession(joinCodeFromUrl);
-          }
-          break;
-          
-        case 'sessionCreated':
-        case 'sessionJoined':
-          console.log('Session joined/created:', message.data);
-          onJoinSession({
-            ...message.data,
-            playerName,
-            clientId: message.data.clientId || clientId,
-            ws: ws
-          });
-          setLoading(false);
-          break;
-          
-        case 'sessionList':
-          setAvailableSessions(message.data.sessions);
-          setLoading(false);
-          break;
-          
-        case 'error':
-          toast.error(message.data.message);
-          setLoading(false);
-          hasTriedJoinRef.current = false; // Reset so we can try again
-          break;
-      }
-    };
-    
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      toast.error('Failed to connect to game server');
-      setIsConnected(false);
-      setLoading(false);
-      setWsConnection(null);
-    };
-    
-    ws.onclose = (event) => {
-      console.log('WebSocket connection closed:', event.code, event.reason);
-      setIsConnected(false);
-      setWsConnection(null);
-      
-      // Only attempt to reconnect if it wasn't a normal closure
-      if (event.code !== 1000 && event.code !== 1001) {
-        // Attempt to reconnect with exponential backoff
-        if (reconnectAttempts < 3) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
-          console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
-          
-          if (reconnectTimerRef.current) {
-            window.clearTimeout(reconnectTimerRef.current);
-          }
-          
-          reconnectTimerRef.current = window.setTimeout(() => {
-            setReconnectAttempts(prev => prev + 1);
-            setWsConnection(null); // Clear the connection to allow a new one
-          }, delay);
+      ws.onopen = () => {
+        if (!isComponentMountedRef.current) return;
+        
+        console.log('WebSocket connection opened');
+        setIsConnected(true);
+        setReconnectAttempts(0);
+        
+        // Set up a ping interval to keep the connection alive
+        if (pingIntervalRef.current) {
+          window.clearInterval(pingIntervalRef.current);
         }
-      }
-    };
+        
+        pingIntervalRef.current = window.setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }));
+          }
+        }, 20000); // Ping every 20 seconds
+      };
+      
+      ws.onmessage = (event) => {
+        if (!isComponentMountedRef.current) return;
+        
+        try {
+          const message = JSON.parse(event.data);
+          
+          switch (message.type) {
+            case 'init':
+              console.log('Received init with client ID:', message.data.clientId);
+              setClientId(message.data.clientId);
+              
+              // If we have a join code from URL and we're now initialized with an ID, 
+              // we can try to auto-join once (and if playerName is set)
+              if (joinCodeFromUrl && playerName.trim() && !hasTriedJoinRef.current) {
+                console.log('Attempting to auto-join with code:', joinCodeFromUrl);
+                hasTriedJoinRef.current = true;
+                handleJoinSession(joinCodeFromUrl);
+              }
+              break;
+              
+            case 'sessionCreated':
+            case 'sessionJoined':
+              console.log('Session joined/created:', message.data);
+              onJoinSession({
+                ...message.data,
+                playerName,
+                clientId: message.data.clientId || clientId,
+                ws: ws
+              });
+              setLoading(false);
+              break;
+              
+            case 'sessionList':
+              setAvailableSessions(message.data.sessions);
+              setLoading(false);
+              break;
+              
+            case 'error':
+              toast.error(message.data.message);
+              setLoading(false);
+              hasTriedJoinRef.current = false; // Reset so we can try again
+              break;
+              
+            case 'pong':
+              // Connection is alive
+              break;
+          }
+        } catch (err) {
+          console.error('Error parsing message:', err);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        if (!isComponentMountedRef.current) return;
+        
+        console.error('WebSocket error:', error);
+        toast.error('Failed to connect to game server');
+        setIsConnected(false);
+        setLoading(false);
+        globalWsConnection = null;
+      };
+      
+      ws.onclose = (event) => {
+        if (!isComponentMountedRef.current) return;
+        
+        console.log('WebSocket connection closed:', event.code, event.reason);
+        setIsConnected(false);
+        globalWsConnection = null;
+        
+        // Clear ping interval
+        if (pingIntervalRef.current) {
+          window.clearInterval(pingIntervalRef.current);
+          pingIntervalRef.current = null;
+        }
+        
+        // Only attempt to reconnect if it wasn't a normal closure and component is still mounted
+        if (event.code !== 1000 && event.code !== 1001 && isComponentMountedRef.current) {
+          // Attempt to reconnect with exponential backoff
+          if (reconnectAttempts < 3) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+            console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
+            
+            if (reconnectTimerRef.current) {
+              window.clearTimeout(reconnectTimerRef.current);
+            }
+            
+            reconnectTimerRef.current = window.setTimeout(() => {
+              if (isComponentMountedRef.current) {
+                setReconnectAttempts(prev => prev + 1);
+                globalWsConnection = null; // Clear the connection to allow a new one
+              }
+            }, delay);
+          }
+        }
+      };
+    } catch (err) {
+      console.error('Error creating WebSocket:', err);
+      toast.error('Failed to connect to game server');
+      globalWsConnection = null;
+    }
     
     return () => {
-      if (reconnectTimerRef.current) {
-        window.clearTimeout(reconnectTimerRef.current);
+      // Do NOT close the websocket on component cleanup - it's global
+      // But do clear any intervals
+      if (pingIntervalRef.current) {
+        window.clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
       }
       
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        console.log('Closing WebSocket connection on cleanup');
-        ws.close();
+      if (reconnectTimerRef.current) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
       }
     };
-  }, [onJoinSession, reconnectAttempts, wsConnection, joinCodeFromUrl, playerName]);
+  }, [onJoinSession, reconnectAttempts, joinCodeFromUrl, playerName, clientId]);
   
   // Refresh the session list periodically
   useEffect(() => {
-    if (!wsConnection || !isConnected) return;
+    if (!globalWsConnection || !isConnected) return;
     
     const fetchSessions = () => {
-      if (wsConnection && isConnected) {
-        wsConnection.send(JSON.stringify({
+      if (globalWsConnection && globalWsConnection.readyState === WebSocket.OPEN) {
+        globalWsConnection.send(JSON.stringify({
           type: 'listSessions'
         }));
       }
@@ -162,16 +234,21 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
     const interval = setInterval(fetchSessions, 10000);
     
     return () => clearInterval(interval);
-  }, [wsConnection, isConnected]);
+  }, [isConnected]);
   
   const handleCreateSession = () => {
     if (!validateName()) return;
     
     setLoading(true);
-    wsConnection?.send(JSON.stringify({
-      type: 'createSession',
-      playerName: playerName.trim()
-    }));
+    if (globalWsConnection && globalWsConnection.readyState === WebSocket.OPEN) {
+      globalWsConnection.send(JSON.stringify({
+        type: 'createSession',
+        playerName: playerName.trim()
+      }));
+    } else {
+      setLoading(false);
+      toast.error('Not connected to server');
+    }
   };
   
   const handleJoinSession = (code?: string) => {
@@ -185,11 +262,17 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
     
     setLoading(true);
     console.log('Sending join session request for code:', codeToUse);
-    wsConnection?.send(JSON.stringify({
-      type: 'joinSession',
-      sessionCode: codeToUse,
-      playerName: playerName.trim()
-    }));
+    
+    if (globalWsConnection && globalWsConnection.readyState === WebSocket.OPEN) {
+      globalWsConnection.send(JSON.stringify({
+        type: 'joinSession',
+        sessionCode: codeToUse,
+        playerName: playerName.trim()
+      }));
+    } else {
+      setLoading(false);
+      toast.error('Not connected to server');
+    }
   };
   
   const validateName = () => {
@@ -320,7 +403,11 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
                         variant="ghost" 
                         size="sm" 
                         className="h-8 px-2" 
-                        onClick={() => wsConnection?.send(JSON.stringify({ type: 'listSessions' }))}
+                        onClick={() => {
+                          if (globalWsConnection && globalWsConnection.readyState === WebSocket.OPEN) {
+                            globalWsConnection.send(JSON.stringify({ type: 'listSessions' }));
+                          }
+                        }}
                         disabled={loading}
                       >
                         <RefreshIcon className="h-4 w-4" />
