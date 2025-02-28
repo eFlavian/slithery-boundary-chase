@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -118,7 +119,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
           case 'sessionState':
             setSessionState(data.data);
             if (data.data.gameStarted) {
-              console.log("Game marked as started in sessionState");
+              console.log("Game marked as started in sessionState, triggering onGameStart");
               onGameStart();
             }
             break;
@@ -132,7 +133,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
             break;
             
           case 'gameStart':
-            console.log("Received gameStart message, starting game");
+            console.log("Received gameStart message, directly starting game");
+            // Directly call onGameStart to ensure game starts
             onGameStart();
             break;
         }

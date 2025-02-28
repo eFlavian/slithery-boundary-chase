@@ -89,24 +89,20 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
       
       return () => clearTimeout(timer);
     } else if (countdown === 0) {
-      // When countdown reaches 0, directly trigger game start
-      console.log("Countdown reached 0, starting game now");
-      // Force gameStarting to true to prevent duplicate triggers
-      setGameStarting(true);
-      // Directly call onGameStart to bypass any potential issues
-      onGameStart(); 
+      console.log("Countdown reached 0, calling onGameStart directly");
+      // Force game to start immediately when countdown reaches 0
+      onGameStart();
     }
   }, [countdown, onGameStart]);
 
   // Check if game has started from the server
   useEffect(() => {
-    if (sessionState?.gameStarted && !gameStarting) {
-      console.log("Game marked as started in session state, starting game now");
-      setGameStarting(true);
-      // Ensure we call onGameStart directly
+    if (sessionState?.gameStarted) {
+      console.log("Game marked as started in session state, calling onGameStart directly");
+      // Force the game to start if server says it has started
       onGameStart();
     }
-  }, [sessionState?.gameStarted, onGameStart, gameStarting]);
+  }, [sessionState?.gameStarted, onGameStart]);
 
   const updateName = () => {
     if (localName.trim() && localName !== playerName) {
