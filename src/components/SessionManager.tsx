@@ -19,6 +19,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
   const [playerName, setPlayerName] = useState("Player");
   const [activeTab, setActiveTab] = useState<string>("create");
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+  const [retryFn, setRetryFn] = useState<(() => void) | null>(null);
 
   // Force game start function to ensure it happens no matter what
   const forceGameStart = useCallback(() => {
@@ -33,10 +34,12 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
   );
 
   const handleConnectionChange = useCallback((connected: boolean) => {
+    console.log("Connection state changed:", connected);
     setIsConnected(connected);
   }, []);
 
   const handleInit = useCallback((newPlayerId: string) => {
+    console.log("Player initialized with ID:", newPlayerId);
     setPlayerId(newPlayerId);
   }, []);
 
@@ -44,12 +47,13 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
     handleSessionMessage(data);
   }, [handleSessionMessage]);
 
-  const handleExternalWsConnection = useCallback((ws: WebSocket | null) => {
+  const handleExternalWsConnection = useCallback((ws: WebSocket | null, retry?: () => void) => {
     setWsConnection(ws);
+    if (retry) setRetryFn(retry);
   }, []);
 
   if (!isConnected) {
-    return <ConnectingScreen />;
+    return <ConnectingScreen onRetry={retryFn || undefined} />;
   }
 
   if (sessionState) {

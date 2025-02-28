@@ -23,36 +23,43 @@ const SessionWebSocket: React.FC<SessionWebSocketProps> = ({
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const connectWebSocket = () => {
-      const ws = new WebSocket(wsUrl);
-      
-      ws.addEventListener('open', () => {
-        onConnectionChange(true);
-        setWsConnection(ws);
-        console.log("WebSocket connected successfully");
-      });
-      
-      ws.addEventListener('close', () => {
-        onConnectionChange(false);
-        setWsConnection(null);
-        console.log("WebSocket connection closed");
-        
-        setTimeout(connectWebSocket, 3000);
-      });
-      
-      ws.addEventListener('error', (error) => {
-        console.error("WebSocket error:", error);
-        toast({
-          title: "Connection Error",
-          description: "Failed to connect to the game server. Retrying...",
-          variant: "destructive"
-        });
-      });
-      
-      setWsConnection(ws);
-    };
+  const connectWebSocket = useCallback(() => {
+    console.log("Attempting to connect WebSocket to:", wsUrl);
     
+    if (wsConnection) {
+      wsConnection.close();
+    }
+    
+    const ws = new WebSocket(wsUrl);
+    
+    ws.addEventListener('open', () => {
+      onConnectionChange(true);
+      setWsConnection(ws);
+      console.log("WebSocket connected successfully");
+    });
+    
+    ws.addEventListener('close', () => {
+      onConnectionChange(false);
+      setWsConnection(null);
+      console.log("WebSocket connection closed");
+      
+      // Automatic reconnection handled elsewhere
+    });
+    
+    ws.addEventListener('error', (error) => {
+      console.error("WebSocket error:", error);
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to the game server. Retrying...",
+        variant: "destructive"
+      });
+    });
+    
+    setWsConnection(ws);
+  }, [wsUrl, toast, onConnectionChange, wsConnection]);
+
+  // Initial connection
+  useEffect(() => {
     connectWebSocket();
     
     return () => {
@@ -60,7 +67,7 @@ const SessionWebSocket: React.FC<SessionWebSocketProps> = ({
         wsConnection.close();
       }
     };
-  }, [wsUrl, toast, onConnectionChange]);
+  }, [wsUrl, connectWebSocket]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -86,11 +93,14 @@ const SessionWebSocket: React.FC<SessionWebSocketProps> = ({
     }
   }, [wsConnection, onInit, onMessage]);
 
-  // Make wsConnection available to parent component
+  // Make wsConnection and retry function available
   return (
     <>
       {React.Children.map(React.Children.only(null), child => {
-        return React.cloneElement(child as React.ReactElement, { wsConnection });
+        return React.cloneElement(child as React.ReactElement, { 
+          wsConnection,
+          retryConnection: connectWebSocket 
+        });
       })}
     </>
   );
