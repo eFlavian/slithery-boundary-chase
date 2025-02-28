@@ -46,12 +46,47 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
   const isHost = sessionState?.host === playerId;
   const isReady = sessionState?.players.find(p => p.id === playerId)?.isReady || false;
   const allReady = sessionState?.players.every(p => p.isReady) || false;
+  const [countdown, setCountdown] = useState<number | null>(null);
 
+  // Watch for all players ready condition
+  useEffect(() => {
+    if (sessionState && allReady && isHost && !sessionState.gameStarted) {
+      // Host sends start game signal when all players are ready
+      wsConnection?.send(JSON.stringify({
+        type: 'startGame',
+        playerId
+      }));
+      
+      toast({
+        title: "All players ready!",
+        description: "Starting game in 3 seconds...",
+      });
+    }
+  }, [allReady, isHost, playerId, sessionState, wsConnection, toast]);
+
+  // Watch for game started state
   useEffect(() => {
     if (sessionState?.gameStarted) {
+      // Start countdown when game is marked as started
+      setCountdown(3);
+    }
+  }, [sessionState?.gameStarted]);
+
+  // Handle countdown timer
+  useEffect(() => {
+    if (countdown === null) return;
+    
+    if (countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(countdown - 1);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    } else if (countdown === 0) {
+      // When countdown reaches 0, trigger game start
       onGameStart();
     }
-  }, [sessionState?.gameStarted, onGameStart]);
+  }, [countdown, onGameStart]);
 
   const updateName = () => {
     if (localName.trim() && localName !== playerName) {
@@ -161,6 +196,18 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
             ))}
           </div>
         </div>
+
+        {countdown !== null && (
+          <div className="bg-blue-100 p-3 rounded-md text-center">
+            <p>Game starting in: <span className="font-bold text-xl">{countdown}</span> seconds</p>
+          </div>
+        )}
+
+        {allReady && !sessionState.gameStarted && (
+          <div className="bg-green-100 p-3 rounded-md text-center">
+            <p>All players ready! {isHost ? "Starting game soon..." : "Waiting for host to start..."}</p>
+          </div>
+        )}
       </CardContent>
       <CardFooter className="flex justify-between">
         <Button variant="outline" onClick={leaveSession}>

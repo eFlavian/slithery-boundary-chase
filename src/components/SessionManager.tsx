@@ -46,11 +46,13 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
       ws.addEventListener('open', () => {
         setIsConnected(true);
         setWsConnection(ws);
+        console.log("WebSocket connected successfully");
       });
       
       ws.addEventListener('close', () => {
         setIsConnected(false);
         setWsConnection(null);
+        console.log("WebSocket connection closed");
         
         // Auto reconnect after delay
         setTimeout(connectWebSocket, 3000);
@@ -82,6 +84,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
+        console.log("Received WebSocket message:", data);
         
         switch (data.type) {
           case 'init':
@@ -98,6 +101,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
             
           case 'sessionState':
             setSessionState(data.data);
+            // Check if game is marked as started
+            if (data.data.gameStarted) {
+              console.log("Game marked as started in sessionState");
+            }
             break;
             
           case 'error':
@@ -109,6 +116,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
             break;
             
           case 'gameStart':
+            console.log("Received gameStart message, starting game");
             onGameStart();
             break;
         }

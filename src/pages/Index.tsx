@@ -38,6 +38,7 @@ const Index = () => {
   }, []);
 
   const handleGameStart = () => {
+    console.log("Game start triggered from Index.tsx");
     setGameActive(true);
   };
 
