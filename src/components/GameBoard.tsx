@@ -84,6 +84,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   const minimapBlinkRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
   const isCameraInitializedRef = useRef<boolean>(false);
+  const gameContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const ws = sessionData.ws;
@@ -157,6 +158,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setIsReady(false);
           isCameraInitializedRef.current = false; // Reset camera initialization flag
           toast.success('Game started!');
+          
+          // Ensure we get the latest game state to position camera correctly
+          ws.send(JSON.stringify({
+            type: 'requestGameState'
+          }));
           break;
           
         case 'hostChanged':
@@ -232,7 +238,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           type: 'requestGameState'
         }));
       }
-    }, 5000); // Poll every 5 seconds
+    }, 2000); // Poll every 2 seconds - reduced from 5 to be more responsive
 
     return () => {
       if (gameLoop.current) {
@@ -455,32 +461,51 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
 
   // Reset camera position when game starts or when player changes
   useEffect(() => {
-    if (isPlaying && currentPlayer?.snake?.[0] && !isCameraInitializedRef.current) {
+    // Only run this effect when isPlaying changes to true
+    if (isPlaying && currentPlayer?.snake?.[0]) {
+      // Force camera to player's initial position when game starts
+      isCameraInitializedRef.current = false;
+      
       const containerWidth = window.innerWidth;
       const containerHeight = window.innerHeight;
 
-      // Set camera directly to player position
+      // Reset camera position to center on player
       cameraPositionRef.current = {
         x: containerWidth / 2 - (currentPlayer.snake[0].x * CELL_SIZE),
         y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
       };
       
-      // Update camera container if it exists
-      const container = document.querySelector('.game-container') as HTMLDivElement;
-      if (container) {
-        container.style.transform = `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
+      // Immediately update the game container position
+      if (gameContainerRef.current) {
+        gameContainerRef.current.style.transform = `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
       }
-      
-      isCameraInitializedRef.current = true;
     }
-  }, [isPlaying, currentPlayer]);
+  }, [isPlaying]);
+
+  // Effect to update camera whenever the current player's position changes
+  useEffect(() => {
+    if (currentPlayer?.snake?.[0] && isPlaying) {
+      // Update camera position to follow player
+      if (!isCameraInitializedRef.current) {
+        const containerWidth = window.innerWidth;
+        const containerHeight = window.innerHeight;
+
+        // Set camera directly to player position
+        cameraPositionRef.current = {
+          x: containerWidth / 2 - (currentPlayer.snake[0].x * CELL_SIZE),
+          y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
+        };
+        
+        isCameraInitializedRef.current = true;
+      }
+    }
+  }, [currentPlayer, isPlaying]);
 
   // Main camera update logic
   const updateCamera = () => {
-    if (currentPlayer?.snake?.[0]) {
-      const container = document.querySelector('.game-container') as HTMLDivElement;
-      if (container) {
-        container.style.transform = getViewportTransform(currentPlayer.snake[0]);
+    if (currentPlayer?.snake?.[0] && isPlaying) {
+      if (gameContainerRef.current) {
+        gameContainerRef.current.style.transform = getViewportTransform(currentPlayer.snake[0]);
       }
     }
     animationFrameRef.current = requestAnimationFrame(updateCamera);
@@ -497,24 +522,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       }
     };
   }, []);
-
-  // Update camera reference when game state changes
-  useEffect(() => {
-    if (players.length > 0 && !isCameraInitializedRef.current) {
-      // Try to initialize camera when players data is available
-      if (currentPlayer?.snake?.[0]) {
-        const containerWidth = window.innerWidth;
-        const containerHeight = window.innerHeight;
-
-        cameraPositionRef.current = {
-          x: containerWidth / 2 - (currentPlayer.snake[0].x * CELL_SIZE),
-          y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
-        };
-        
-        isCameraInitializedRef.current = true;
-      }
-    }
-  }, [players, currentPlayer]);
 
   const renderMinimap = () => {
     if (!isMinimapVisible) return null;
@@ -876,15 +883,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
         <div className="relative w-full h-full">
           {createHashPattern()}
           <div
+            ref={gameContainerRef}
             className="absolute game-container"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
-              transform: currentPlayer?.snake?.[0] ?
-                getViewportTransform(currentPlayer.snake[0]) :
-                'translate3d(0, 0, 0)',
-              willChange: 'transform',
-              transition: 'transform 150ms linear'
+              transform: 'translate3d(0, 0, 0)',
+              willChange: 'transform'
             }}
           >
             <div

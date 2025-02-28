@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +21,10 @@ interface SessionManagerProps {
 let globalWsConnection: WebSocket | null = null;
 
 const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
-  const [playerName, setPlayerName] = useState('');
+  const [playerName, setPlayerName] = useState(() => {
+    const storedName = localStorage.getItem('playerName');
+    return storedName || '';
+  });
   const [sessionCode, setSessionCode] = useState('');
   const [availableSessions, setAvailableSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,16 +57,40 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
     };
   }, []);
 
+  // Check for join code in URL and parse it
   useEffect(() => {
-    // Check if there's a join code in the URL
-    const params = new URLSearchParams(window.location.search);
-    const joinCode = params.get('join');
+    const parseUrlParams = () => {
+      const params = new URLSearchParams(window.location.search);
+      const joinCode = params.get('join');
+      
+      if (joinCode) {
+        console.log('Join code found in URL:', joinCode);
+        setSessionCode(joinCode);
+        setJoinCodeFromUrl(joinCode);
+        
+        // Clean the URL without refreshing the page
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    };
     
-    if (joinCode) {
-      setSessionCode(joinCode);
-      setJoinCodeFromUrl(joinCode);
-    }
+    // Parse URL parameters on mount
+    parseUrlParams();
+    
+    // Also add event listener for popstate (back/forward navigation)
+    window.addEventListener('popstate', parseUrlParams);
+    
+    return () => {
+      window.removeEventListener('popstate', parseUrlParams);
+    };
   }, []);
+
+  // Store player name in localStorage whenever it changes
+  useEffect(() => {
+    if (playerName) {
+      localStorage.setItem('playerName', playerName);
+    }
+  }, [playerName]);
 
   useEffect(() => {
     // Connect to WebSocket server, but only if we don't already have a connection
@@ -114,8 +142,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
               setClientId(message.data.clientId);
               
               // If we have a join code from URL and we're now initialized with an ID, 
-              // we can try to auto-join once (and if playerName is set)
-              if (joinCodeFromUrl && playerName.trim() && !hasTriedJoinRef.current) {
+              // and we have a player name, try to auto-join
+              if (joinCodeFromUrl && playerName.trim() && !hasTriedJoinRef.current && clientId) {
                 console.log('Attempting to auto-join with code:', joinCodeFromUrl);
                 hasTriedJoinRef.current = true;
                 handleJoinSession(joinCodeFromUrl);
@@ -217,6 +245,16 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
       }
     };
   }, [onJoinSession, reconnectAttempts, joinCodeFromUrl, playerName, clientId]);
+  
+  // Auto-join attempt when necessary conditions are met
+  useEffect(() => {
+    // If we have all the necessary pieces and haven't tried joining yet
+    if (joinCodeFromUrl && playerName.trim() && clientId && isConnected && !hasTriedJoinRef.current) {
+      console.log('Auto-joining session with code:', joinCodeFromUrl);
+      hasTriedJoinRef.current = true;
+      handleJoinSession(joinCodeFromUrl);
+    }
+  }, [joinCodeFromUrl, playerName, clientId, isConnected]);
   
   // Refresh the session list periodically
   useEffect(() => {
