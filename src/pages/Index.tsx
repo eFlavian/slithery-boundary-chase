@@ -6,6 +6,7 @@ import SessionManager from "@/components/SessionManager";
 const Index = () => {
   const [inGame, setInGame] = useState(false);
   const [sessionData, setSessionData] = useState(null);
+  const [gameKey, setGameKey] = useState(Date.now()); // Key for complete recreation of the component
   
   // Prevent touch devices from zooming when double-tapping the game
   useEffect(() => {
@@ -27,9 +28,10 @@ const Index = () => {
     const style = document.createElement('style');
     style.textContent = `
       .game-container {
-        transition: transform 0.1s ease-out;
         will-change: transform;
         transform-origin: 0 0;
+        position: absolute;
+        z-index: 10;
       }
     `;
     document.head.appendChild(style);
@@ -44,11 +46,17 @@ const Index = () => {
     setInGame(true);
   };
   
+  const handleLeaveGame = () => {
+    setInGame(false);
+    // Force recreation of GameBoard component next time by generating a new key
+    setGameKey(Date.now());
+  };
+  
   return inGame ? (
     <GameBoard 
-      key={`game-board-${Date.now()}`} // Force complete recreation of component when game restarts
+      key={`game-board-${gameKey}`} // Force complete recreation of component when game restarts
       sessionData={sessionData} 
-      onLeaveGame={() => setInGame(false)} 
+      onLeaveGame={handleLeaveGame} 
     />
   ) : (
     <SessionManager onJoinSession={handleJoinSession} />
