@@ -23,6 +23,17 @@ const Index = () => {
     metaTag.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
     document.getElementsByTagName('head')[0].appendChild(metaTag);
     
+    // Add specific styles to ensure the game board is positioned correctly
+    const style = document.createElement('style');
+    style.textContent = `
+      .game-container {
+        transition: transform 0.1s ease-out;
+        will-change: transform;
+        transform-origin: 0 0;
+      }
+    `;
+    document.head.appendChild(style);
+    
     return () => {
       document.removeEventListener('touchmove', preventZoom);
     };
@@ -35,7 +46,7 @@ const Index = () => {
   
   return inGame ? (
     <GameBoard 
-      key="game-board" // Force recreation of component when game restarts
+      key={`game-board-${Date.now()}`} // Force complete recreation of component when game restarts
       sessionData={sessionData} 
       onLeaveGame={() => setInGame(false)} 
     />
