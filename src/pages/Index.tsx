@@ -32,6 +32,14 @@ const Index = () => {
         transform-origin: 0 0;
         position: absolute;
         z-index: 10;
+        transform: translate3d(0, 0, 0);
+      }
+      
+      /* Added hardware acceleration and smoother transitions */
+      .game-container {
+        backface-visibility: hidden;
+        perspective: 1000;
+        transition: transform 60ms linear;
       }
     `;
     document.head.appendChild(style);
@@ -49,6 +57,7 @@ const Index = () => {
   const handleLeaveGame = () => {
     setInGame(false);
     // Force recreation of GameBoard component next time by generating a new key
+    // This ensures all component state is completely reset
     setGameKey(Date.now());
   };
   

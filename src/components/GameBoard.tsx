@@ -73,6 +73,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   const [isGameActive, setIsGameActive] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [winner, setWinner] = useState<{ name: string; score: number } | null>(null);
+  const [cameraCentered, setCameraCentered] = useState(false);
   
   // Game state refs
   const gameLoop = useRef<number>();
@@ -85,18 +86,42 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const cameraIntervalRef = useRef<number | null>(null);
   const isCameraInitialized = useRef<boolean>(false);
+  const initialGameStateRequested = useRef<boolean>(false);
   
-  // Get the current player
+  // Get the current player - now with debug information
   const getCurrentPlayer = () => {
-    return players.find(p => p.id === sessionData.clientId);
+    if (!players || players.length === 0) {
+      console.log("[CAMERA DEBUG] No players data available");
+      return null;
+    }
+    
+    const player = players.find(p => p.id === sessionData.clientId);
+    
+    if (!player) {
+      console.log("[CAMERA DEBUG] Player not found with ID:", sessionData.clientId);
+      console.log("[CAMERA DEBUG] Available player IDs:", players.map(p => p.id));
+    } else if (!player.snake || player.snake.length === 0) {
+      console.log("[CAMERA DEBUG] Player found but has no snake segments");
+    } else {
+      console.log("[CAMERA DEBUG] Found player with ID:", player.id, "at position:", player.snake[0]);
+    }
+    
+    return player;
   };
   
-  // FIXED: Simplified camera system to reliably center on snake
+  // IMPROVED: Enhanced camera system to reliably center on snake
   const centerOnSnake = () => {
     const currentPlayer = getCurrentPlayer();
     
     if (!currentPlayer?.snake?.length || !gameContainerRef.current) {
+      // Debug information
       console.log("[CAMERA] Cannot center: player not found or no snake or no game container");
+      if (currentPlayer && !currentPlayer.snake?.length) {
+        console.log("[CAMERA] Player exists but snake is empty:", currentPlayer);
+      }
+      if (!gameContainerRef.current) {
+        console.log("[CAMERA] Game container ref is null");
+      }
       return false;
     }
     
@@ -115,25 +140,39 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     gameContainerRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
     
     console.log("[CAMERA] Centered on snake at", head, "with translation", { x, y });
+    setCameraCentered(true);
     return true;
   };
   
   // Force center immediately and display toast with result
   const handleForceCenter = () => {
-    const success = centerOnSnake();
-    if (success) {
-      toast.success("Camera centered on your snake");
-    } else {
-      toast.error("Cannot center camera - player not found");
-      
-      // Debug info
-      console.log("[CAMERA DEBUG] Players:", players);
-      console.log("[CAMERA DEBUG] Current client ID:", sessionData.clientId);
-      console.log("[CAMERA DEBUG] Game container ref:", gameContainerRef.current);
-    }
+    // Immediate request for latest game state
+    sessionData.ws.send(JSON.stringify({
+      type: 'requestGameState'
+    }));
+    
+    // Try to force center after a small delay to ensure we have the latest data
+    setTimeout(() => {
+      const success = centerOnSnake();
+      if (success) {
+        toast.success("Camera centered on your snake");
+      } else {
+        toast.error("Cannot center camera - player not found");
+        
+        // Detailed debug info
+        console.log("[CAMERA DEBUG] Players:", players);
+        console.log("[CAMERA DEBUG] Current client ID:", sessionData.clientId);
+        console.log("[CAMERA DEBUG] Game container ref:", gameContainerRef.current);
+        
+        // Try re-requesting game state
+        sessionData.ws.send(JSON.stringify({
+          type: 'requestGameState'
+        }));
+      }
+    }, 100);
   };
   
-  // Camera initialization and tracking
+  // Improved camera initialization and tracking
   useEffect(() => {
     // Clear any existing interval first
     if (cameraIntervalRef.current) {
@@ -143,10 +182,32 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     
     // Setup the camera tracking when game is active
     if (isPlaying && !gameOver) {
-      console.log("[CAMERA] Setting up camera tracking");
+      console.log("[CAMERA] Setting up camera tracking, isPlaying:", isPlaying);
       
-      // Try to center immediately
+      // Aggressively request game state when game starts
+      if (!initialGameStateRequested.current) {
+        console.log("[CAMERA] First time initializing camera - requesting state aggressively");
+        initialGameStateRequested.current = true;
+        
+        // Request state multiple times
+        const requestGameState = () => {
+          sessionData.ws.send(JSON.stringify({
+            type: 'requestGameState'
+          }));
+        };
+        
+        // Initial requests with increasing delays
+        requestGameState();
+        for (let i = 1; i <= 20; i++) {
+          setTimeout(requestGameState, i * 100); // Request every 100ms for 2 seconds
+        }
+      }
+      
+      // Try to center immediately and after short delays
       centerOnSnake();
+      setTimeout(centerOnSnake, 300);
+      setTimeout(centerOnSnake, 600);
+      setTimeout(centerOnSnake, 1000);
       
       // Set up continuous camera tracking with a more aggressive interval
       cameraIntervalRef.current = window.setInterval(() => {
@@ -169,6 +230,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   // Immediate response to player data changes
   useEffect(() => {
     if (isPlaying && !gameOver && players.length > 0) {
+      console.log("[CAMERA] Player data updated, players count:", players.length);
+      
       // Force center when player data changes
       centerOnSnake();
       
@@ -178,6 +241,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
         
         // Try to center immediately with a slight delay to ensure DOM is ready
         setTimeout(centerOnSnake, 50);
+        setTimeout(centerOnSnake, 200);
+        setTimeout(centerOnSnake, 500);
         
         // Ensure interval is running
         if (!cameraIntervalRef.current) {
@@ -222,6 +287,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setYellowDots(message.data.yellowDots || []);
           setPortals(message.data.portals);
           setIsGameActive(message.data.isActive);
+          
+          // Attempt to center camera on state update if playing
+          if (isPlaying && !gameOver) {
+            // Slight delay to allow React to update state
+            setTimeout(centerOnSnake, 50);
+          }
           break;
 
         case 'playerDeath':
@@ -232,6 +303,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setGameOver(true);
           setIsPlaying(false);
           setIsMinimapVisible(false);
+          setCameraCentered(false);
           
           // Clear all timers
           if (minimapTimerRef.current) clearTimeout(minimapTimerRef.current);
@@ -256,6 +328,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setCountdown(message.data.countdown);
           toast.info(`Game starting in ${message.data.countdown} seconds!`);
           
+          // Prepare for camera reset on game start
+          setCameraCentered(false);
+          initialGameStateRequested.current = false;
+          
           let count = message.data.countdown;
           const countdownTimer = setInterval(() => {
             count--;
@@ -272,9 +348,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setIsPlaying(true);
           setGameOver(false);
           setIsReady(false);
+          setCameraCentered(false);
           
           // Reset camera initialization flag
           isCameraInitialized.current = false;
+          initialGameStateRequested.current = false;
           
           console.log("[CAMERA] Game started - requesting game state");
           
@@ -289,8 +367,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           pollForPosition();
           
           // Multiple aggressive polls to ensure we get the position quickly
+          for (let i = 1; i <= 20; i++) {
+            setTimeout(pollForPosition, i * 100); // Poll every 100ms for 2 seconds
+          }
+          
+          // Try to force center the camera at various intervals after game start
           for (let i = 1; i <= 10; i++) {
-            setTimeout(pollForPosition, i * 200); // Poll every 200ms for 2 seconds
+            setTimeout(centerOnSnake, i * 200); // Try centering every 200ms
           }
           
           toast.success('Game started!');
@@ -389,7 +472,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       }
       clearInterval(statePollingInterval);
     };
-  }, [sessionData.ws]);
+  }, [sessionData.ws, isPlaying, gameOver]);
 
   const handleToggleReady = () => {
     const newReadyState = !isReady;
@@ -900,7 +983,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
 
-  // Button to manually reset camera position - made more prominent
+  // Button to manually reset camera position - made more prominent and added state indicator
   const renderForceResetButton = () => {
     if (!isPlaying) return null;
     
@@ -909,10 +992,26 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
         variant="default"
         size="sm"
         onClick={handleForceCenter}
-        className="fixed z-[9999] bottom-20 left-1/2 transform -translate-x-1/2 bg-blue-600 hover:bg-blue-700 px-4 py-2 shadow-lg animate-pulse"
+        className={`fixed z-[9999] bottom-20 left-1/2 transform -translate-x-1/2 px-4 py-2 shadow-lg ${
+          cameraCentered ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700 animate-pulse'
+        }`}
       >
-        Center Camera
+        {cameraCentered ? 'Camera Centered' : 'Center Camera'}
       </Button>
+    );
+  };
+
+  // Debug info overlay for development (can be removed in production)
+  const renderDebugInfo = () => {
+    if (!isPlaying) return null;
+    
+    return (
+      <div className="fixed z-[9999] top-4 right-4 bg-black/70 text-white p-2 rounded text-xs">
+        <div>Player ID: {sessionData.clientId}</div>
+        <div>Players: {players.length}</div>
+        <div>Camera Centered: {cameraCentered ? 'Yes' : 'No'}</div>
+        <div>Current Position: {currentPlayer?.snake?.[0] ? `${currentPlayer.snake[0].x},${currentPlayer.snake[0].y}` : 'Unknown'}</div>
+      </div>
     );
   };
 
@@ -938,6 +1037,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       {renderCountdown()}
       {renderWinner()}
       {renderForceResetButton()}
+      {renderDebugInfo()}
 
       {/* Game Area - Fixed position relative to viewport */}
       <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
@@ -947,7 +1047,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           {/* Game Container - This will be translated to follow the player */}
           <div
             ref={gameContainerRef}
-            className="absolute z-10 will-change-transform"
+            className="absolute z-10 will-change-transform game-container"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
