@@ -1,20 +1,54 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap, Map } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap, Map, Copy, X, CheckCircle, Users, Home } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-type Position = {
+interface Position {
   x: number;
   y: number;
-};
+}
 
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type FoodType = 'normal' | 'special';
 
-type FoodItem = Position & { type: FoodType };
+interface FoodItem extends Position {
+  type: FoodType;
+}
+
 type Portal = Position;
 type YellowDot = Position;
+
+interface GamePlayer {
+  id: string;
+  name: string;
+  snake: Position[];
+  direction: Direction;
+  score: number;
+  speedBoostPercentage: number;
+  isPlaying: boolean;
+  minimapVisible: boolean;
+  minimapTimer: number | null;
+  isReady: boolean;
+}
+
+interface SessionData {
+  sessionId: string;
+  sessionCode: string;
+  hostId: string;
+  hostName?: string;
+  playerName: string;
+  clientId: string;
+  ws: WebSocket;
+}
+
+interface GameBoardProps {
+  sessionData: SessionData;
+  onLeaveGame: () => void;
+}
 
 const GRID_SIZE = 256;
 const CELL_SIZE = 15;
@@ -24,22 +58,23 @@ const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
 const INACTIVE_PLAYER_OPACITY = 0.2;
 
-const GameBoard: React.FC = () => {
+const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   const { theme, setTheme } = useTheme();
-  const [playerId, setPlayerId] = useState<string | null>(null);
-  const [players, setPlayers] = useState<any[]>([]);
+  const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [yellowDots, setYellowDots] = useState<YellowDot[]>([]);
   const [portals, setPortals] = useState<Portal[]>([]);
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
-  const [playerName, setPlayerName] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMinimapVisible, setIsMinimapVisible] = useState(false);
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [isGameActive, setIsGameActive] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [winner, setWinner] = useState<{ name: string; score: number } | null>(null);
+  
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
   const cameraPositionRef = useRef({ x: 0, y: 0 });
@@ -47,42 +82,22 @@ const GameBoard: React.FC = () => {
   const animationFrameRef = useRef<number>();
   const minimapTimerRef = useRef<number>();
   const minimapBlinkRef = useRef<number>();
-  const reconnectTimerRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
 
-  const connectToServer = () => {
-    // Fix for mobile: Use the current hostname instead of hardcoded localhost
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
-    const wsUrl = `${protocol}//${wsHost}`;
+  useEffect(() => {
+    // Set up message handlers
+    const ws = sessionData.ws;
     
-    console.log(`Connecting to WebSocket server at: ${wsUrl}`);
-    
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
-    
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      console.log('Connected to server');
-      toast.success('Connected to game server');
-      setReconnectAttempts(0);
-    };
-
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
 
       switch (message.type) {
-        case 'init':
-          setPlayerId(message.data.playerId);
-          break;
-
         case 'gameState':
           setPlayers(message.data.players);
           setFoods(message.data.foods);
           setYellowDots(message.data.yellowDots || []);
           setPortals(message.data.portals);
+          setIsGameActive(message.data.isActive);
           break;
 
         case 'playerDeath':
@@ -103,6 +118,48 @@ const GameBoard: React.FC = () => {
             clearInterval(countdownIntervalRef.current);
           }
           toast.error(`Game Over! ${message.data.message}`);
+          break;
+          
+        case 'gameWinner':
+          setWinner({
+            name: message.data.playerName,
+            score: message.data.score
+          });
+          setTimeout(() => {
+            setWinner(null);
+          }, 8000); // Display winner for 8 seconds
+          break;
+          
+        case 'gameStarting':
+          setCountdown(message.data.countdown);
+          toast.info(`Game starting in ${message.data.countdown} seconds!`);
+          
+          // Countdown timer
+          let count = message.data.countdown;
+          const countdownTimer = setInterval(() => {
+            count--;
+            setCountdown(count);
+            
+            if (count <= 0) {
+              clearInterval(countdownTimer);
+            }
+          }, 1000);
+          break;
+          
+        case 'gameStarted':
+          setCountdown(null);
+          setIsPlaying(true);
+          setGameOver(false);
+          setIsReady(false);
+          toast.success('Game started!');
+          break;
+          
+        case 'hostChanged':
+          toast.info(`${message.data.hostName} is now the host`);
+          break;
+          
+        case 'error':
+          toast.error(message.data.message);
           break;
           
         case 'minimapUpdate':
@@ -169,46 +226,48 @@ const GameBoard: React.FC = () => {
       }
     };
 
-    ws.onclose = () => {
-      console.log('Disconnected from server');
-      toast.error('Disconnected from game server');
-      
-      // Attempt to reconnect with exponential backoff
-      if (reconnectAttempts < 5) {
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-        console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
-        
-        if (reconnectTimerRef.current) {
-          clearTimeout(reconnectTimerRef.current);
-        }
-        
-        reconnectTimerRef.current = window.setTimeout(() => {
-          setReconnectAttempts(prev => prev + 1);
-          connectToServer();
-        }, delay);
+    return () => {
+      // Clean up when unmounting
+      if (gameLoop.current) {
+        clearInterval(gameLoop.current);
+      }
+      if (minimapTimerRef.current) {
+        clearTimeout(minimapTimerRef.current);
+      }
+      if (minimapBlinkRef.current) {
+        clearInterval(minimapBlinkRef.current);
+      }
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
       }
     };
+  }, [sessionData.ws]);
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    wsRef.current = ws;
-  };
-
-  const handleStartGame = () => {
-    if (!playerName.trim()) {
-      toast.error("Please enter a name first!");
-      return;
-    }
-
-    wsRef.current?.send(JSON.stringify({
-      type: 'spawn',
-      playerName: playerName.trim(),
-      playerId
+  const handleToggleReady = () => {
+    const newReadyState = !isReady;
+    setIsReady(newReadyState);
+    
+    sessionData.ws.send(JSON.stringify({
+      type: 'toggleReady',
+      isReady: newReadyState
     }));
     
-    setIsPlaying(true);
+    toast.success(newReadyState ? 'You are now ready!' : 'You are no longer ready');
+  };
+  
+  const handleForceStart = () => {
+    if (isHost) {
+      sessionData.ws.send(JSON.stringify({
+        type: 'startGame'
+      }));
+    }
+  };
+  
+  const handleLeaveSession = () => {
+    sessionData.ws.send(JSON.stringify({
+      type: 'leaveSession'
+    }));
+    onLeaveGame();
   };
 
   const handleDirection = (newDirection: Direction) => {
@@ -225,16 +284,17 @@ const GameBoard: React.FC = () => {
 
     if (direction !== newDirection) {
       setDirection(newDirection);
-      wsRef.current?.send(JSON.stringify({
+      sessionData.ws.send(JSON.stringify({
         type: 'direction',
-        direction: newDirection,
-        playerId
+        direction: newDirection
       }));
       updateGame();
     }
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
+    if (!isPlaying || gameOver) return;
+    
     if (event.key.startsWith('Arrow')) {
       event.preventDefault();
     }
@@ -288,17 +348,15 @@ const GameBoard: React.FC = () => {
   };
 
   const updateGame = () => {
-    if (!wsRef.current || gameOver) return;
+    if (gameOver || !isPlaying) return;
 
-    wsRef.current.send(JSON.stringify({
-      type: 'update',
-      playerId
+    sessionData.ws.send(JSON.stringify({
+      type: 'update'
     }));
 
     if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage > 0) {
-      wsRef.current.send(JSON.stringify({
-        type: 'speedBoost',
-        playerId
+      sessionData.ws.send(JSON.stringify({
+        type: 'speedBoost'
       }));
     } else if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage <= 0) {
       setIsSpeedBoostActive(false);
@@ -306,36 +364,42 @@ const GameBoard: React.FC = () => {
   };
 
   useEffect(() => {
-    connectToServer();
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     return () => {
-      wsRef.current?.close();
-      if (minimapTimerRef.current) {
-        clearTimeout(minimapTimerRef.current);
-      }
-      if (minimapBlinkRef.current) {
-        clearInterval(minimapBlinkRef.current);
-      }
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-      }
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-      }
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [direction, isPlaying, gameOver]);
 
   useEffect(() => {
-    if (!gameOver && playerId && isPlaying) {
+    if (isPlaying && !gameOver) {
       const speed = isSpeedBoostActive ? INITIAL_SPEED / 2 : INITIAL_SPEED;
       gameLoop.current = window.setInterval(updateGame, speed);
       return () => clearInterval(gameLoop.current);
     }
-  }, [gameOver, direction, isSpeedBoostActive, playerId, isPlaying]);
+  }, [isPlaying, gameOver, direction, isSpeedBoostActive]);
 
-  const currentPlayer = players.find(p => p.id === playerId);
+  const copySessionCode = () => {
+    navigator.clipboard.writeText(sessionData.sessionCode);
+    toast.success('Session code copied to clipboard');
+  };
+  
+  const copySessionLink = () => {
+    const url = `${window.location.origin}?join=${sessionData.sessionCode}`;
+    navigator.clipboard.writeText(url);
+    toast.success('Invite link copied to clipboard');
+  };
+
+  const currentPlayer = players.find(p => p.id === sessionData.clientId);
   const score = currentPlayer?.score || 0;
   const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
+  const isHost = sessionData.hostId === sessionData.clientId;
+  
+  const allPlayersReady = players.length > 0 && players.every(p => p.isReady);
+  const canStartGame = isHost && allPlayersReady && !isGameActive;
 
+  // Remaining component functions (createHashPattern, lerp, getViewportTransform, etc.)
   const createHashPattern = () => {
     return (
       <div className="absolute inset-0 w-full h-full" style={{ backgroundColor: 'rgba(30,30,30,0.2)' }}>
@@ -408,7 +472,7 @@ const GameBoard: React.FC = () => {
         y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
       };
     }
-  }, [playerId]);
+  }, [currentPlayer]);
 
   const renderMinimap = () => {
     if (!isMinimapVisible) return null;
@@ -440,7 +504,7 @@ const GameBoard: React.FC = () => {
 
           {/* Game elements */}
           {players.map(player => {
-            const isCurrentPlayer = player.id === playerId;
+            const isCurrentPlayer = player.id === sessionData.clientId;
             if (!player.snake?.[0]) return null;
             
             return (
@@ -529,21 +593,10 @@ const GameBoard: React.FC = () => {
     );
   };
 
-  const isActivePlayer = (player: any) => {
-    return player.id !== playerId || (player.id === playerId && isPlaying && !gameOver);
-  };
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [direction, currentPlayer?.speedBoostPercentage]);
-
   // Player Score UI
   const renderPlayerScore = () => {
+    if (!isPlaying) return null;
+    
     return (
       <div className="absolute top-4 transform left-1/2 -translate-x-1/2 z-[999] text-center">
         <div className="bg-black/40 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/20 text-white">
@@ -566,14 +619,14 @@ const GameBoard: React.FC = () => {
         <div className="bg-black/40 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-white/20">
           <div className="flex items-center gap-2 mb-3">
             <Trophy className="w-4 h-4 text-yellow-400" />
-            <h3 className="text-xs uppercase tracking-wider text-white font-semibold">Leaderboard</h3>
+            <h3 className="text-xs uppercase tracking-wider text-white font-semibold">Players</h3>
           </div>
           <div className="space-y-1.5 max-h-[300px] overflow-y-auto scrollbar-thin">
             {topPlayers.map((player, index) => (
               <div
                 key={player.id}
                 className={`flex justify-between items-center text-xs rounded-lg px-2 py-1 ${
-                  player.id === playerId 
+                  player.id === sessionData.clientId 
                     ? 'bg-blue-500/30 text-white font-semibold' 
                     : 'text-white/90'
                 }`}
@@ -581,8 +634,16 @@ const GameBoard: React.FC = () => {
                 <div className="flex items-center gap-1.5 truncate">
                   <span className="text-xs opacity-60 w-4">{index + 1}.</span>
                   <span className="truncate">{player.name}</span>
+                  {player.id === sessionData.hostId && (
+                    <span className="ml-1 text-yellow-400 text-[8px] uppercase font-bold">Host</span>
+                  )}
                 </div>
-                <span className="font-semibold">{player.score}</span>
+                <div className="flex items-center">
+                  {!isGameActive && (
+                    <span className={`w-2 h-2 rounded-full mr-1 ${player.isReady ? 'bg-green-500' : 'bg-red-500'}`} />
+                  )}
+                  <span className="font-semibold">{player.score}</span>
+                </div>
               </div>
             ))}
             {players.length === 0 && (
@@ -598,6 +659,8 @@ const GameBoard: React.FC = () => {
 
   // Speed Boost UI
   const renderSpeedBoost = () => {
+    if (!isPlaying) return null;
+    
     const boostActive = isSpeedBoostActive && speedBoostPercentage > 0;
     return (
       <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-[999]">
@@ -634,12 +697,138 @@ const GameBoard: React.FC = () => {
       </div>
     );
   };
+  
+  // Session Info UI
+  const renderSessionInfo = () => {
+    if (isGameActive) return null;
+    
+    return (
+      <div className="absolute top-4 transform left-1/2 -translate-x-1/2 z-[999] w-80">
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-lg">Game Room</CardTitle>
+              {isHost && (
+                <Badge variant="outline" className="font-normal text-xs bg-yellow-500/10 text-yellow-400 border-yellow-400/20">
+                  Host
+                </Badge>
+              )}
+            </div>
+            <CardDescription>
+              Share this code with friends to join:
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pb-3">
+            <div className="flex gap-2 items-center mb-3">
+              <div className="flex-1 px-3 py-1.5 bg-black/20 rounded-md font-mono text-center text-lg font-semibold">
+                {sessionData.sessionCode}
+              </div>
+              <Button 
+                size="icon" 
+                variant="outline" 
+                className="h-9 w-9" 
+                onClick={copySessionCode}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={copySessionLink} 
+              className="w-full text-xs"
+            >
+              Copy Invite Link
+            </Button>
+          </CardContent>
+          <CardFooter className="flex justify-between border-t pt-3">
+            <div className="flex items-center gap-1.5 text-sm">
+              <Users className="h-4 w-4" />
+              <span>{players.length} Players</span>
+            </div>
+            {isGameActive ? (
+              <Badge>Game in progress</Badge>
+            ) : (
+              <div className="flex gap-2">
+                <Button 
+                  variant={isReady ? "destructive" : "default"}
+                  size="sm"
+                  onClick={handleToggleReady}
+                >
+                  {isReady ? "Not Ready" : "Ready"}
+                </Button>
+                {isHost && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    disabled={!canStartGame}
+                    onClick={handleForceStart}
+                  >
+                    Start Game
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  };
+  
+  // Countdown UI
+  const renderCountdown = () => {
+    if (countdown === null) return null;
+    
+    return (
+      <div className="fixed inset-0 flex items-center justify-center z-[1000] pointer-events-none">
+        <div className="text-9xl font-bold text-white/90 animate-pulse">
+          {countdown}
+        </div>
+      </div>
+    );
+  };
+  
+  // Winner Announcement
+  const renderWinner = () => {
+    if (!winner) return null;
+    
+    return (
+      <div className="fixed inset-0 flex items-center justify-center z-[1000] pointer-events-none">
+        <div className="bg-black/50 backdrop-blur-sm px-8 py-6 rounded-2xl text-center">
+          <div className="text-2xl font-bold text-white mb-2">
+            {winner.name} Wins!
+          </div>
+          <div className="flex items-center justify-center gap-2 text-yellow-400">
+            <Trophy className="h-5 w-5" />
+            <span className="text-xl font-semibold">{winner.score} points</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Leave Game Button
+  const renderLeaveButton = () => {
+    if (isGameActive) return null;
+    
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleLeaveSession}
+        className="absolute top-4 left-4 bg-black/40 backdrop-blur-md border-white/20 text-white z-[999]"
+      >
+        <Home className="h-4 w-4 mr-1.5" />
+        Leave Room
+      </Button>
+    );
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <button
         onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        className="fixed top-4 left-4 p-2 rounded-lg bg-gray-200/80 dark:bg-gray-700/80 border-2 border-gray-300 dark:border-gray-600 z-[999]"
+        className="fixed bottom-4 left-4 p-2 rounded-lg bg-gray-200/80 dark:bg-gray-700/80 border-2 border-gray-300 dark:border-gray-600 z-[999]"
       >
         {theme === 'dark' ? (
           <Sun className="w-6 h-6 text-gray-700 dark:text-gray-200" />
@@ -648,41 +837,14 @@ const GameBoard: React.FC = () => {
         )}
       </button>
 
-      {!isPlaying && !gameOver && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-6 max-w-sm w-full">
-            <h2 className="text-2xl font-bold text-center text-white mb-6">Welcome to Snake Game</h2>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="playerName" className="block text-sm font-medium text-white/80 mb-2">
-                  Enter your name
-                </label>
-                <input
-                  type="text"
-                  id="playerName"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-900/60 border border-white/20 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Your name"
-                  maxLength={15}
-                />
-              </div>
-              <button
-                onClick={handleStartGame}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mt-4"
-              >
-                <Play className="w-5 h-5" />
-                Start Game
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {renderLeaveButton()}
+      {renderSessionInfo()}
       {renderMinimap()}
       {renderPlayerScore()}
       {renderLeaderboard()}
       {renderSpeedBoost()}
+      {renderCountdown()}
+      {renderWinner()}
 
       <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="relative w-full h-full">
@@ -767,7 +929,7 @@ const GameBoard: React.FC = () => {
                   )}
                   {index > 0 && (
                     <div
-                      className={`w-full h-full rounded-sm ${player.id === playerId ?
+                      className={`w-full h-full rounded-sm ${player.id === sessionData.clientId ?
                         'bg-gray-800 dark:bg-gray-200' :
                         'bg-red-500 dark:bg-red-400'
                       }`}
@@ -813,67 +975,48 @@ const GameBoard: React.FC = () => {
         </div>
       </div>
 
-      <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-64 h-64 z-[999]">
-        <button
-          className="absolute top-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-          onClick={() => handleDirection('UP')}
-        >
-          <ArrowUp className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-        </button>
+      {isPlaying && (
+        <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-64 h-64 z-[999]">
+          <button
+            className="absolute top-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
+            onClick={() => handleDirection('UP')}
+          >
+            <ArrowUp className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+          </button>
 
-        <button
-          className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-          onClick={() => handleDirection('LEFT')}
-        >
-          <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-        </button>
+          <button
+            className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
+            onClick={() => handleDirection('LEFT')}
+          >
+            <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+          </button>
 
-        <button
-          className="absolute right-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-          onClick={() => handleDirection('RIGHT')}
-        >
-          <ArrowRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-        </button>
+          <button
+            className="absolute right-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
+            onClick={() => handleDirection('RIGHT')}
+          >
+            <ArrowRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+          </button>
 
-        <button
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-          onClick={() => handleDirection('DOWN')}
-        >
-          <ArrowDown className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-        </button>
+          <button
+            className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
+            onClick={() => handleDirection('DOWN')}
+          >
+            <ArrowDown className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+          </button>
 
-        <button
-          className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${currentPlayer?.speedBoostPercentage > 0
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
-            } border-2 border-gray-300 dark:border-gray-600`}
-          onTouchStart={() => {
-            if (currentPlayer?.speedBoostPercentage > 0) setIsSpeedBoostActive(true);
-          }}
-          onTouchEnd={() => setIsSpeedBoostActive(false)}
-        >
-          BOOST
-        </button>
-      </div>
-
-      {gameOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-[1000]">
-          <div className="bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-6 max-w-sm w-full text-center">
-            <h2 className="text-2xl font-bold mb-4 text-white">Game Over</h2>
-            <div className="flex justify-center items-center space-x-2 mb-6">
-              <Trophy className="w-5 h-5 text-yellow-400" />
-              <p className="text-white text-xl font-semibold">Score: {score}</p>
-            </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Play className="w-4 h-4" />
-                Play Again
-              </div>
-            </button>
-          </div>
+          <button
+            className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${currentPlayer?.speedBoostPercentage > 0
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+              } border-2 border-gray-300 dark:border-gray-600`}
+            onTouchStart={() => {
+              if (currentPlayer?.speedBoostPercentage > 0) setIsSpeedBoostActive(true);
+            }}
+            onTouchEnd={() => setIsSpeedBoostActive(false)}
+          >
+            BOOST
+          </button>
         </div>
       )}
     </div>
