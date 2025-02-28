@@ -80,17 +80,42 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   const minimapBlinkRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
   const gameContainerRef = useRef<HTMLDivElement>(null);
-  const cameraUpdateRef = useRef<number>();
-  const cameraInitializedRef = useRef(false);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const cameraFollowRef = useRef<number>();
 
-  // Debug counter for tracking camera updates
-  const cameraUpdateCounterRef = useRef(0);
+  // Use to track if camera has been initialized
+  const [cameraInitialized, setCameraInitialized] = useState(false);
 
-  // Simple logging function
+  // Simple logging function for debugging camera issues
   const debugLog = (message: string, data?: any) => {
-    console.log(`[DEBUG] ${message}`, data || '');
+    console.log(`[CAMERA DEBUG] ${message}`, data || '');
   };
 
+  // Function to center camera on player
+  const centerCameraOnPlayer = () => {
+    const currentPlayer = players.find(p => p.id === sessionData.clientId);
+    if (!currentPlayer?.snake?.[0] || !gameContainerRef.current || !viewportRef.current) {
+      return;
+    }
+
+    const head = currentPlayer.snake[0];
+    const viewportWidth = viewportRef.current.clientWidth;
+    const viewportHeight = viewportRef.current.clientHeight;
+    
+    // Calculate center position
+    const targetX = (viewportWidth / 2) - (head.x * CELL_SIZE);
+    const targetY = (viewportHeight / 2) - (head.y * CELL_SIZE);
+
+    // Set transform directly
+    gameContainerRef.current.style.transform = `translate(${targetX}px, ${targetY}px)`;
+    
+    debugLog("Camera centered on player", {
+      playerHead: {x: head.x, y: head.y},
+      targetPosition: {x: targetX, y: targetY}
+    });
+  };
+
+  // Setup WebSocket connection and message handlers
   useEffect(() => {
     const ws = sessionData.ws;
     
@@ -109,6 +134,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setYellowDots(message.data.yellowDots || []);
           setPortals(message.data.portals);
           setIsGameActive(message.data.isActive);
+          
+          // If game is active and camera not initialized, reset the camera
+          if (message.data.isActive && isPlaying && !cameraInitialized) {
+            // Give a tiny delay to allow state to update
+            setTimeout(centerCameraOnPlayer, 10);
+            setCameraInitialized(true);
+            debugLog("Camera initialized from gameState update");
+          }
           break;
 
         case 'playerDeath':
@@ -119,7 +152,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setGameOver(true);
           setIsPlaying(false);
           setIsMinimapVisible(false);
-          cameraInitializedRef.current = false;
+          setCameraInitialized(false);
+          
           if (minimapTimerRef.current) {
             clearTimeout(minimapTimerRef.current);
           }
@@ -129,6 +163,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
+          if (cameraFollowRef.current) {
+            cancelAnimationFrame(cameraFollowRef.current);
+          }
+          
           toast.error(`Game Over! ${message.data.message}`);
           break;
           
@@ -162,23 +200,23 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setIsPlaying(true);
           setGameOver(false);
           setIsReady(false);
-          cameraInitializedRef.current = false;
+          setCameraInitialized(false);
           debugLog("Game started - camera will be reset");
           
-          // Aggressively request game state to get initial player positions
-          const requestStateInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({
-                type: 'requestGameState'
-              }));
-              debugLog("Requesting game state for camera positioning");
-            }
-          }, 100);
+          // Aggressively request game state to get initial player positions for camera setup
+          const requestInitialState = () => {
+            ws.send(JSON.stringify({
+              type: 'requestGameState'
+            }));
+            debugLog("Requesting game state for initial camera position");
+          };
           
-          // Stop the aggressive polling after 3 seconds
-          setTimeout(() => {
-            clearInterval(requestStateInterval);
-          }, 3000);
+          // Request state multiple times with decreasing interval
+          requestInitialState();
+          setTimeout(requestInitialState, 100);
+          setTimeout(requestInitialState, 300);
+          setTimeout(requestInitialState, 600);
+          setTimeout(requestInitialState, 1000);
           
           toast.success('Game started!');
           break;
@@ -271,12 +309,71 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
       }
-      if (cameraUpdateRef.current) {
-        cancelAnimationFrame(cameraUpdateRef.current);
+      if (cameraFollowRef.current) {
+        cancelAnimationFrame(cameraFollowRef.current);
       }
       clearInterval(statePollingInterval);
+      
+      debugLog("GameBoard component unmounting - cleanup complete");
     };
   }, [sessionData.ws]);
+
+  // Watch for player updates to center camera
+  useEffect(() => {
+    if (isPlaying && !gameOver) {
+      const currentPlayer = players.find(p => p.id === sessionData.clientId);
+      if (currentPlayer?.snake?.[0]) {
+        // If camera not initialized, center it now
+        if (!cameraInitialized) {
+          centerCameraOnPlayer();
+          setCameraInitialized(true);
+          debugLog("Camera initialized from player update");
+        }
+      }
+    }
+  }, [players, isPlaying, gameOver, cameraInitialized]);
+
+  // Start camera follow animation frame loop when game is active
+  useEffect(() => {
+    if (!isPlaying || gameOver) {
+      // Cancel any existing animation loop
+      if (cameraFollowRef.current) {
+        cancelAnimationFrame(cameraFollowRef.current);
+        cameraFollowRef.current = undefined;
+      }
+      return;
+    }
+
+    // Function to continuously update camera position
+    const updateCameraFrame = () => {
+      centerCameraOnPlayer();
+      cameraFollowRef.current = requestAnimationFrame(updateCameraFrame);
+    };
+    
+    // Start the animation loop
+    cameraFollowRef.current = requestAnimationFrame(updateCameraFrame);
+    debugLog("Started camera follow animation loop");
+    
+    return () => {
+      if (cameraFollowRef.current) {
+        cancelAnimationFrame(cameraFollowRef.current);
+        debugLog("Stopped camera follow animation loop");
+      }
+    };
+  }, [isPlaying, gameOver]);
+
+  // Handle window resize to update camera
+  useEffect(() => {
+    const handleResize = () => {
+      if (isPlaying && !gameOver) {
+        centerCameraOnPlayer();
+        debugLog("Camera repositioned due to window resize");
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isPlaying, gameOver]);
 
   const handleToggleReady = () => {
     const newReadyState = !isReady;
@@ -452,130 +549,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       </div>
     );
   };
-
-  // NEW CAMERA SYSTEM
-  // This is a completely redesigned camera system to ensure it always follows the player
-  // *****************************************************************************
-
-  // Update camera to follow the current player's snake head
-  const updateCamera = () => {
-    if (!gameContainerRef.current || !isPlaying || gameOver || !currentPlayer?.snake?.[0]) {
-      return;
-    }
-
-    const head = currentPlayer.snake[0];
-    const containerWidth = window.innerWidth;
-    const containerHeight = window.innerHeight;
-    
-    // Calculate the position to center the snake head on the screen
-    const x = containerWidth / 2 - (head.x * CELL_SIZE);
-    const y = containerHeight / 2 - (head.y * CELL_SIZE);
-
-    // Apply the new position to the game container
-    gameContainerRef.current.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-    
-    // Debug logging - occasionally log camera position
-    if (cameraUpdateCounterRef.current % 60 === 0) { // Only log every 60 frames
-      debugLog("Camera position updated", { 
-        playerHeadX: head.x, 
-        playerHeadY: head.y,
-        cameraX: x,
-        cameraY: y
-      });
-    }
-    
-    cameraUpdateCounterRef.current++;
-    
-    // Continue the camera update loop
-    cameraUpdateRef.current = requestAnimationFrame(updateCamera);
-  };
-  
-  // Force reset the camera position
-  const resetCamera = () => {
-    if (!currentPlayer?.snake?.[0] || !gameContainerRef.current) return;
-    
-    const head = currentPlayer.snake[0];
-    const containerWidth = window.innerWidth;
-    const containerHeight = window.innerHeight;
-    
-    // Calculate position to center snake head
-    const x = containerWidth / 2 - (head.x * CELL_SIZE);
-    const y = containerHeight / 2 - (head.y * CELL_SIZE);
-    
-    // Apply immediately without animation
-    gameContainerRef.current.style.transition = 'none';
-    gameContainerRef.current.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-    
-    // Force a reflow to ensure the transition removal takes effect
-    gameContainerRef.current.offsetHeight;
-    
-    // Restore transition for smooth future updates
-    setTimeout(() => {
-      if (gameContainerRef.current) {
-        gameContainerRef.current.style.transition = '';
-      }
-    }, 50);
-    
-    debugLog("Camera position RESET", { x, y, playerHead: head });
-    cameraInitializedRef.current = true;
-  };
-
-  // Monitor player position changes to update camera
-  useEffect(() => {
-    if (isPlaying && currentPlayer?.snake?.[0]) {
-      // If camera not initialized, reset it to current position
-      if (!cameraInitializedRef.current) {
-        resetCamera();
-      }
-    }
-  }, [currentPlayer, isPlaying]);
-
-  // Start/stop the camera update loop based on game state
-  useEffect(() => {
-    // Start the animation loop when the game is playing
-    if (isPlaying && !gameOver) {
-      // Cancel any existing animation frame first
-      if (cameraUpdateRef.current) {
-        cancelAnimationFrame(cameraUpdateRef.current);
-      }
-      cameraUpdateRef.current = requestAnimationFrame(updateCamera);
-      debugLog("Camera update loop started");
-    }
-    
-    // Clean up the animation frame when component unmounts or game state changes
-    return () => {
-      if (cameraUpdateRef.current) {
-        cancelAnimationFrame(cameraUpdateRef.current);
-        debugLog("Camera update loop stopped");
-      }
-    };
-  }, [isPlaying, gameOver]);
-
-  // Handle game state changes
-  useEffect(() => {
-    if (isPlaying) {
-      // Reset camera when game starts
-      cameraInitializedRef.current = false;
-      debugLog("Game started - camera will be reset once player position is available");
-    }
-  }, [isPlaying]);
-
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (isPlaying && currentPlayer?.snake?.[0]) {
-        resetCamera();
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [isPlaying, currentPlayer]);
-
-  // END NEW CAMERA SYSTEM
-  // *****************************************************************************
 
   const renderMinimap = () => {
     if (!isMinimapVisible) return null;
@@ -920,8 +893,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
         variant="outline"
         size="sm"
         onClick={() => {
-          resetCamera();
-          debugLog("Manual camera reset triggered");
+          centerCameraOnPlayer();
+          setCameraInitialized(true);
+          debugLog("Manual camera reset triggered by button press");
         }}
         className="absolute bottom-20 right-4 bg-black/40 backdrop-blur-md border-white/20 text-white z-[999]"
       >
@@ -953,7 +927,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       {renderWinner()}
       {renderForceResetButton()}
 
-      <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
+      {/* Viewport container with ref */}
+      <div 
+        ref={viewportRef}
+        className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden"
+      >
         <div className="relative w-full h-full">
           {createHashPattern()}
           <div
@@ -962,8 +940,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
-              willChange: 'transform',
-              transform: 'translate(0, 0)'
+              willChange: 'transform'
             }}
           >
             <div

@@ -34,7 +34,11 @@ const Index = () => {
   };
   
   return inGame ? (
-    <GameBoard sessionData={sessionData} onLeaveGame={() => setInGame(false)} />
+    <GameBoard 
+      key="game-board" // Force recreation of component when game restarts
+      sessionData={sessionData} 
+      onLeaveGame={() => setInGame(false)} 
+    />
   ) : (
     <SessionManager onJoinSession={handleJoinSession} />
   );
