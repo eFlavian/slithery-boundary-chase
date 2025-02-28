@@ -1,3 +1,4 @@
+
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -413,6 +414,7 @@ wss.on('connection', (ws) => {
               minimapTimeLeft: 0
             });
             
+            // Immediately broadcast game state to all players
             broadcastGameState(joinedSession.id);
           } else {
             console.log(`Session not found for code: ${data.sessionCode}`);
@@ -423,6 +425,13 @@ wss.on('connection', (ws) => {
           }
           break;
         
+        case 'requestGameState':
+          // Client is requesting the current game state
+          if (sessionId && sessions.has(sessionId)) {
+            broadcastGameState(sessionId);
+          }
+          break;
+          
         case 'toggleReady':
           if (!session) return;
           

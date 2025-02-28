@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap, Map, Copy, X, CheckCircle, Users, Home } from 'lucide-react';
@@ -85,6 +86,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
 
   useEffect(() => {
     const ws = sessionData.ws;
+    
+    // Request current game state immediately upon joining
+    ws.send(JSON.stringify({
+      type: 'requestGameState'
+    }));
     
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -217,6 +223,15 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       }
     };
 
+    // Set up a polling interval to request game state updates
+    const statePollingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'requestGameState'
+        }));
+      }
+    }, 5000); // Poll every 5 seconds
+
     return () => {
       if (gameLoop.current) {
         clearInterval(gameLoop.current);
@@ -230,6 +245,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
       }
+      clearInterval(statePollingInterval); // Clear the polling interval on cleanup
     };
   }, [sessionData.ws]);
 
