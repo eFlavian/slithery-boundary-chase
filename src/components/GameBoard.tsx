@@ -1,298 +1,88 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap, Map, Copy, X, CheckCircle, Users, Home } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sun, Moon, Play, Trophy, Zap, Map } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
-interface Position {
+type Position = {
   x: number;
   y: number;
-}
+};
 
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type FoodType = 'normal' | 'special';
 
-interface FoodItem extends Position {
-  type: FoodType;
-}
-
+type FoodItem = Position & { type: FoodType };
 type Portal = Position;
 type YellowDot = Position;
-
-interface GamePlayer {
-  id: string;
-  name: string;
-  snake: Position[];
-  direction: Direction;
-  score: number;
-  speedBoostPercentage: number;
-  isPlaying: boolean;
-  minimapVisible: boolean;
-  minimapTimer: number | null;
-  isReady: boolean;
-}
-
-interface SessionData {
-  sessionId: string;
-  sessionCode: string;
-  hostId: string;
-  hostName?: string;
-  playerName: string;
-  clientId: string;
-  ws: WebSocket;
-}
-
-interface GameBoardProps {
-  sessionData: SessionData;
-  onLeaveGame: () => void;
-}
 
 const GRID_SIZE = 256;
 const CELL_SIZE = 15;
 const INITIAL_SPEED = 140;
+const CAMERA_SMOOTHING = 0.55;
 const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
 const INACTIVE_PLAYER_OPACITY = 0.2;
 
-const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
+const GameBoard: React.FC = () => {
   const { theme, setTheme } = useTheme();
-  const [players, setPlayers] = useState<GamePlayer[]>([]);
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  const [players, setPlayers] = useState<any[]>([]);
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [yellowDots, setYellowDots] = useState<YellowDot[]>([]);
   const [portals, setPortals] = useState<Portal[]>([]);
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
+  const [playerName, setPlayerName] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMinimapVisible, setIsMinimapVisible] = useState(false);
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
-  const [isReady, setIsReady] = useState(false);
-  const [isGameActive, setIsGameActive] = useState(false);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [winner, setWinner] = useState<{ name: string; score: number } | null>(null);
-  const [cameraCentered, setCameraCentered] = useState(false);
-  
-  // Game state refs
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const wsRef = useRef<WebSocket | null>(null);
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
+  const cameraPositionRef = useRef({ x: 0, y: 0 });
+  const lastUpdateTime = useRef(0);
+  const animationFrameRef = useRef<number>();
   const minimapTimerRef = useRef<number>();
   const minimapBlinkRef = useRef<number>();
+  const reconnectTimerRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
-  
-  // Camera tracking
-  const gameContainerRef = useRef<HTMLDivElement>(null);
-  const cameraIntervalRef = useRef<number | null>(null);
-  const isCameraInitialized = useRef<boolean>(false);
-  const initialGameStateRequested = useRef<boolean>(false);
-  
-  // Get the current player - now with debug information
-  const getCurrentPlayer = () => {
-    if (!players || players.length === 0) {
-      console.log("[CAMERA DEBUG] No players data available");
-      return null;
+
+  const connectToServer = () => {
+    // Fix for mobile: Use the current hostname instead of hardcoded localhost
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
+    const wsUrl = `${protocol}//${wsHost}`;
+    
+    console.log(`Connecting to WebSocket server at: ${wsUrl}`);
+    
+    if (wsRef.current) {
+      wsRef.current.close();
     }
     
-    const player = players.find(p => p.id === sessionData.clientId);
-    
-    if (!player) {
-      console.log("[CAMERA DEBUG] Player not found with ID:", sessionData.clientId);
-      console.log("[CAMERA DEBUG] Available player IDs:", players.map(p => p.id));
-    } else if (!player.snake || player.snake.length === 0) {
-      console.log("[CAMERA DEBUG] Player found but has no snake segments");
-    } else {
-      console.log("[CAMERA DEBUG] Found player with ID:", player.id, "at position:", player.snake[0]);
-    }
-    
-    return player;
-  };
-  
-  // IMPROVED: Enhanced camera system to reliably center on snake
-  const centerOnSnake = () => {
-    const currentPlayer = getCurrentPlayer();
-    
-    if (!currentPlayer?.snake?.length || !gameContainerRef.current) {
-      // Debug information
-      console.log("[CAMERA] Cannot center: player not found or no snake or no game container");
-      if (currentPlayer && !currentPlayer.snake?.length) {
-        console.log("[CAMERA] Player exists but snake is empty:", currentPlayer);
-      }
-      if (!gameContainerRef.current) {
-        console.log("[CAMERA] Game container ref is null");
-      }
-      return false;
-    }
-    
-    // Get the player's head position
-    const head = currentPlayer.snake[0];
-    
-    // Get viewport dimensions
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    
-    // Calculate position to center snake head (corrected calculations)
-    const x = Math.floor(viewportWidth / 2 - (head.x * CELL_SIZE));
-    const y = Math.floor(viewportHeight / 2 - (head.y * CELL_SIZE));
-    
-    // Apply transform with hardware acceleration
-    gameContainerRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-    
-    console.log("[CAMERA] Centered on snake at", head, "with translation", { x, y });
-    setCameraCentered(true);
-    return true;
-  };
-  
-  // Force center immediately and display toast with result
-  const handleForceCenter = () => {
-    // Immediate request for latest game state
-    sessionData.ws.send(JSON.stringify({
-      type: 'requestGameState'
-    }));
-    
-    // Try to force center after a small delay to ensure we have the latest data
-    setTimeout(() => {
-      const success = centerOnSnake();
-      if (success) {
-        toast.success("Camera centered on your snake");
-      } else {
-        toast.error("Cannot center camera - player not found");
-        
-        // Detailed debug info
-        console.log("[CAMERA DEBUG] Players:", players);
-        console.log("[CAMERA DEBUG] Current client ID:", sessionData.clientId);
-        console.log("[CAMERA DEBUG] Game container ref:", gameContainerRef.current);
-        
-        // Try re-requesting game state
-        sessionData.ws.send(JSON.stringify({
-          type: 'requestGameState'
-        }));
-      }
-    }, 100);
-  };
-  
-  // Improved camera initialization and tracking
-  useEffect(() => {
-    // Clear any existing interval first
-    if (cameraIntervalRef.current) {
-      clearInterval(cameraIntervalRef.current);
-      cameraIntervalRef.current = null;
-    }
-    
-    // Setup the camera tracking when game is active
-    if (isPlaying && !gameOver) {
-      console.log("[CAMERA] Setting up camera tracking, isPlaying:", isPlaying);
-      
-      // Aggressively request game state when game starts
-      if (!initialGameStateRequested.current) {
-        console.log("[CAMERA] First time initializing camera - requesting state aggressively");
-        initialGameStateRequested.current = true;
-        
-        // Request state multiple times
-        const requestGameState = () => {
-          sessionData.ws.send(JSON.stringify({
-            type: 'requestGameState'
-          }));
-        };
-        
-        // Initial requests with increasing delays
-        requestGameState();
-        for (let i = 1; i <= 20; i++) {
-          setTimeout(requestGameState, i * 100); // Request every 100ms for 2 seconds
-        }
-      }
-      
-      // Try to center immediately and after short delays
-      centerOnSnake();
-      setTimeout(centerOnSnake, 300);
-      setTimeout(centerOnSnake, 600);
-      setTimeout(centerOnSnake, 1000);
-      
-      // Set up continuous camera tracking with a more aggressive interval
-      cameraIntervalRef.current = window.setInterval(() => {
-        centerOnSnake();
-      }, 50); // More frequent updates for smoother tracking
-      
-      // Mark camera as initialized
-      isCameraInitialized.current = true;
-    }
-    
-    // Cleanup on unmount or when game state changes
-    return () => {
-      if (cameraIntervalRef.current) {
-        clearInterval(cameraIntervalRef.current);
-        cameraIntervalRef.current = null;
-      }
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('Connected to server');
+      toast.success('Connected to game server');
+      setReconnectAttempts(0);
     };
-  }, [isPlaying, gameOver]);
-  
-  // Immediate response to player data changes
-  useEffect(() => {
-    if (isPlaying && !gameOver && players.length > 0) {
-      console.log("[CAMERA] Player data updated, players count:", players.length);
-      
-      // Force center when player data changes
-      centerOnSnake();
-      
-      // If this is the first time we're getting player data, ensure camera is following
-      if (!isCameraInitialized.current && getCurrentPlayer()?.snake?.length) {
-        console.log("[CAMERA] First player data received, initializing camera");
-        
-        // Try to center immediately with a slight delay to ensure DOM is ready
-        setTimeout(centerOnSnake, 50);
-        setTimeout(centerOnSnake, 200);
-        setTimeout(centerOnSnake, 500);
-        
-        // Ensure interval is running
-        if (!cameraIntervalRef.current) {
-          cameraIntervalRef.current = window.setInterval(() => {
-            centerOnSnake();
-          }, 50);
-        }
-        
-        isCameraInitialized.current = true;
-      }
-    }
-  }, [players]);
-  
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (isPlaying) {
-        centerOnSnake();
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isPlaying]);
-  
-  // Setup WebSocket connection and message handlers
-  useEffect(() => {
-    const ws = sessionData.ws;
-    
-    // Request current game state immediately upon joining
-    ws.send(JSON.stringify({
-      type: 'requestGameState'
-    }));
-    
+
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
 
       switch (message.type) {
+        case 'init':
+          setPlayerId(message.data.playerId);
+          break;
+
         case 'gameState':
           setPlayers(message.data.players);
           setFoods(message.data.foods);
           setYellowDots(message.data.yellowDots || []);
           setPortals(message.data.portals);
-          setIsGameActive(message.data.isActive);
-          
-          // Attempt to center camera on state update if playing
-          if (isPlaying && !gameOver) {
-            // Slight delay to allow React to update state
-            setTimeout(centerOnSnake, 50);
-          }
           break;
 
         case 'playerDeath':
@@ -303,91 +93,20 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setGameOver(true);
           setIsPlaying(false);
           setIsMinimapVisible(false);
-          setCameraCentered(false);
-          
-          // Clear all timers
-          if (minimapTimerRef.current) clearTimeout(minimapTimerRef.current);
-          if (minimapBlinkRef.current) clearInterval(minimapBlinkRef.current);
-          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          if (cameraIntervalRef.current) clearInterval(cameraIntervalRef.current);
-          
+          if (minimapTimerRef.current) {
+            clearTimeout(minimapTimerRef.current);
+          }
+          if (minimapBlinkRef.current) {
+            clearInterval(minimapBlinkRef.current);
+          }
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+          }
           toast.error(`Game Over! ${message.data.message}`);
           break;
           
-        case 'gameWinner':
-          setWinner({
-            name: message.data.playerName,
-            score: message.data.score
-          });
-          setTimeout(() => {
-            setWinner(null);
-          }, 8000); // Display winner for 8 seconds
-          break;
-          
-        case 'gameStarting':
-          setCountdown(message.data.countdown);
-          toast.info(`Game starting in ${message.data.countdown} seconds!`);
-          
-          // Prepare for camera reset on game start
-          setCameraCentered(false);
-          initialGameStateRequested.current = false;
-          
-          let count = message.data.countdown;
-          const countdownTimer = setInterval(() => {
-            count--;
-            setCountdown(count);
-            
-            if (count <= 0) {
-              clearInterval(countdownTimer);
-            }
-          }, 1000);
-          break;
-          
-        case 'gameStarted':
-          setCountdown(null);
-          setIsPlaying(true);
-          setGameOver(false);
-          setIsReady(false);
-          setCameraCentered(false);
-          
-          // Reset camera initialization flag
-          isCameraInitialized.current = false;
-          initialGameStateRequested.current = false;
-          
-          console.log("[CAMERA] Game started - requesting game state");
-          
-          // Set up aggressive polling to get player position ASAP for camera centering
-          const pollForPosition = () => {
-            ws.send(JSON.stringify({
-              type: 'requestGameState'
-            }));
-          };
-          
-          // Immediate poll
-          pollForPosition();
-          
-          // Multiple aggressive polls to ensure we get the position quickly
-          for (let i = 1; i <= 20; i++) {
-            setTimeout(pollForPosition, i * 100); // Poll every 100ms for 2 seconds
-          }
-          
-          // Try to force center the camera at various intervals after game start
-          for (let i = 1; i <= 10; i++) {
-            setTimeout(centerOnSnake, i * 200); // Try centering every 200ms
-          }
-          
-          toast.success('Game started!');
-          break;
-          
-        case 'hostChanged':
-          toast.info(`${message.data.hostName} is now the host`);
-          break;
-          
-        case 'error':
-          toast.error(message.data.message);
-          break;
-          
         case 'minimapUpdate':
+          // Clear any existing timers if this is a reset
           if (message.data.reset) {
             if (minimapTimerRef.current) {
               clearTimeout(minimapTimerRef.current);
@@ -403,8 +122,10 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setIsMinimapVisible(message.data.visible);
           setMinimapTimeLeft(message.data.duration);
           
+          // Start new countdown
           let timeLeft = message.data.duration;
           
+          // Clear existing countdown interval if it exists
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
@@ -413,7 +134,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
             timeLeft -= 1;
             setMinimapTimeLeft(timeLeft);
             
+            // Start blinking when 3 seconds are left
             if (timeLeft === 3) {
+              // Clear any existing blink interval
               if (minimapBlinkRef.current) {
                 clearInterval(minimapBlinkRef.current);
               }
@@ -432,6 +155,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
             }
           }, 1000);
           
+          // Set timeout to stop the minimap visibility
           minimapTimerRef.current = window.setTimeout(() => {
             setIsMinimapVisible(false);
             if (minimapBlinkRef.current) {
@@ -445,60 +169,46 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       }
     };
 
-    // Set up regular polling interval to request game state updates
-    const statePollingInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'requestGameState'
-        }));
+    ws.onclose = () => {
+      console.log('Disconnected from server');
+      toast.error('Disconnected from game server');
+      
+      // Attempt to reconnect with exponential backoff
+      if (reconnectAttempts < 5) {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
+        
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current);
+        }
+        
+        reconnectTimerRef.current = window.setTimeout(() => {
+          setReconnectAttempts(prev => prev + 1);
+          connectToServer();
+        }, delay);
       }
-    }, 1000); // Poll every second
-
-    return () => {
-      if (gameLoop.current) {
-        clearInterval(gameLoop.current);
-      }
-      if (minimapTimerRef.current) {
-        clearTimeout(minimapTimerRef.current);
-      }
-      if (minimapBlinkRef.current) {
-        clearInterval(minimapBlinkRef.current);
-      }
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-      }
-      if (cameraIntervalRef.current) {
-        clearInterval(cameraIntervalRef.current);
-      }
-      clearInterval(statePollingInterval);
     };
-  }, [sessionData.ws, isPlaying, gameOver]);
 
-  const handleToggleReady = () => {
-    const newReadyState = !isReady;
-    setIsReady(newReadyState);
-    
-    sessionData.ws.send(JSON.stringify({
-      type: 'toggleReady',
-      isReady: newReadyState
-    }));
-    
-    toast.success(newReadyState ? 'You are now ready!' : 'You are no longer ready');
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    wsRef.current = ws;
   };
-  
-  const handleForceStart = () => {
-    if (isHost) {
-      sessionData.ws.send(JSON.stringify({
-        type: 'startGame'
-      }));
+
+  const handleStartGame = () => {
+    if (!playerName.trim()) {
+      toast.error("Please enter a name first!");
+      return;
     }
-  };
-  
-  const handleLeaveSession = () => {
-    sessionData.ws.send(JSON.stringify({
-      type: 'leaveSession'
+
+    wsRef.current?.send(JSON.stringify({
+      type: 'spawn',
+      playerName: playerName.trim(),
+      playerId
     }));
-    onLeaveGame();
+    
+    setIsPlaying(true);
   };
 
   const handleDirection = (newDirection: Direction) => {
@@ -515,17 +225,16 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
 
     if (direction !== newDirection) {
       setDirection(newDirection);
-      sessionData.ws.send(JSON.stringify({
+      wsRef.current?.send(JSON.stringify({
         type: 'direction',
-        direction: newDirection
+        direction: newDirection,
+        playerId
       }));
       updateGame();
     }
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (!isPlaying || gameOver) return;
-    
     if (event.key.startsWith('Arrow')) {
       event.preventDefault();
     }
@@ -579,15 +288,17 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   };
 
   const updateGame = () => {
-    if (gameOver || !isPlaying) return;
+    if (!wsRef.current || gameOver) return;
 
-    sessionData.ws.send(JSON.stringify({
-      type: 'update'
+    wsRef.current.send(JSON.stringify({
+      type: 'update',
+      playerId
     }));
 
     if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage > 0) {
-      sessionData.ws.send(JSON.stringify({
-        type: 'speedBoost'
+      wsRef.current.send(JSON.stringify({
+        type: 'speedBoost',
+        playerId
       }));
     } else if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage <= 0) {
       setIsSpeedBoostActive(false);
@@ -595,40 +306,35 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   };
 
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+    connectToServer();
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
+      wsRef.current?.close();
+      if (minimapTimerRef.current) {
+        clearTimeout(minimapTimerRef.current);
+      }
+      if (minimapBlinkRef.current) {
+        clearInterval(minimapBlinkRef.current);
+      }
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
     };
-  }, [direction, isPlaying, gameOver]);
+  }, []);
 
   useEffect(() => {
-    if (isPlaying && !gameOver) {
+    if (!gameOver && playerId && isPlaying) {
       const speed = isSpeedBoostActive ? INITIAL_SPEED / 2 : INITIAL_SPEED;
       gameLoop.current = window.setInterval(updateGame, speed);
       return () => clearInterval(gameLoop.current);
     }
-  }, [isPlaying, gameOver, direction, isSpeedBoostActive]);
+  }, [gameOver, direction, isSpeedBoostActive, playerId, isPlaying]);
 
-  const copySessionCode = () => {
-    navigator.clipboard.writeText(sessionData.sessionCode);
-    toast.success('Session code copied to clipboard');
-  };
-  
-  const copySessionLink = () => {
-    const url = `${window.location.origin}?join=${sessionData.sessionCode}`;
-    navigator.clipboard.writeText(url);
-    toast.success('Invite link copied to clipboard');
-  };
-
-  const currentPlayer = players.find(p => p.id === sessionData.clientId);
+  const currentPlayer = players.find(p => p.id === playerId);
   const score = currentPlayer?.score || 0;
   const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
-  const isHost = sessionData.hostId === sessionData.clientId;
-  
-  const allPlayersReady = players.length > 0 && players.every(p => p.isReady);
-  const canStartGame = isHost && allPlayersReady && !isGameActive;
 
   const createHashPattern = () => {
     return (
@@ -649,6 +355,61 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
 
+  const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
+
+  const getViewportTransform = (snakeHead: Position) => {
+    const containerWidth = window.innerWidth;
+    const containerHeight = window.innerHeight;
+
+    const viewportCenterX = containerWidth / 2;
+    const viewportCenterY = containerHeight / 2;
+
+    const targetX = viewportCenterX - (snakeHead.x * CELL_SIZE);
+    const targetY = viewportCenterY - (snakeHead.y * CELL_SIZE);
+
+    const now = performance.now();
+    const deltaTime = now - lastUpdateTime.current;
+    lastUpdateTime.current = now;
+
+    const smoothing = 1 - Math.exp(-CAMERA_SMOOTHING * (deltaTime / 1000)); // Exponential smoothing
+
+    cameraPositionRef.current.x = lerp(cameraPositionRef.current.x, targetX, smoothing);
+    cameraPositionRef.current.y = lerp(cameraPositionRef.current.y, targetY, smoothing);
+
+    return `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
+  };
+
+  const updateCamera = () => {
+    if (currentPlayer?.snake?.[0]) {
+      const container = document.querySelector('.game-container') as HTMLDivElement;
+      if (container) {
+        container.style.transform = getViewportTransform(currentPlayer.snake[0]);
+      }
+    }
+    animationFrameRef.current = requestAnimationFrame(updateCamera);
+  };
+
+  useEffect(() => {
+    updateCamera();
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (currentPlayer?.snake?.[0]) {
+      const containerWidth = window.innerWidth;
+      const containerHeight = window.innerHeight;
+
+      cameraPositionRef.current = {
+        x: containerWidth / 2 - (currentPlayer.snake[0].x * CELL_SIZE),
+        y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
+      };
+    }
+  }, [playerId]);
+
   const renderMinimap = () => {
     if (!isMinimapVisible) return null;
     
@@ -661,6 +422,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
         className={`absolute top-4 right-4 bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-3
           ${blinkClass}`}
       >
+        {/* Timer display */}
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs text-white/70 font-medium">Minimap</div>
           <div className="text-xs text-white/90 font-semibold">{minimapTimeLeft}s</div>
@@ -673,9 +435,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
             height: MINIMAP_SIZE,
           }}
         >
+          {/* Background grid - white background for light mode */}
           <div className="absolute inset-0 bg-white/90" />
+
+          {/* Game elements */}
           {players.map(player => {
-            const isCurrentPlayer = player.id === sessionData.clientId;
+            const isCurrentPlayer = player.id === playerId;
             if (!player.snake?.[0]) return null;
             
             return (
@@ -751,6 +516,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
             />
           ))}
 
+          {/* Grid overlay - darker gray for better visibility on white background */}
           <div
             className="absolute inset-0 opacity-20"
             style={{
@@ -763,9 +529,21 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
 
+  const isActivePlayer = (player: any) => {
+    return player.id !== playerId || (player.id === playerId && isPlaying && !gameOver);
+  };
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [direction, currentPlayer?.speedBoostPercentage]);
+
+  // Player Score UI
   const renderPlayerScore = () => {
-    if (!isPlaying) return null;
-    
     return (
       <div className="absolute top-4 transform left-1/2 -translate-x-1/2 z-[999] text-center">
         <div className="bg-black/40 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/20 text-white">
@@ -776,7 +554,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
 
+  // Leaderboard UI
   const renderLeaderboard = () => {
+    // Only show top 10 players
     const topPlayers = [...players]
       .sort((a, b) => b.score - a.score)
       .slice(0, 10);
@@ -786,14 +566,14 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
         <div className="bg-black/40 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-white/20">
           <div className="flex items-center gap-2 mb-3">
             <Trophy className="w-4 h-4 text-yellow-400" />
-            <h3 className="text-xs uppercase tracking-wider text-white font-semibold">Players</h3>
+            <h3 className="text-xs uppercase tracking-wider text-white font-semibold">Leaderboard</h3>
           </div>
           <div className="space-y-1.5 max-h-[300px] overflow-y-auto scrollbar-thin">
             {topPlayers.map((player, index) => (
               <div
                 key={player.id}
                 className={`flex justify-between items-center text-xs rounded-lg px-2 py-1 ${
-                  player.id === sessionData.clientId 
+                  player.id === playerId 
                     ? 'bg-blue-500/30 text-white font-semibold' 
                     : 'text-white/90'
                 }`}
@@ -801,16 +581,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
                 <div className="flex items-center gap-1.5 truncate">
                   <span className="text-xs opacity-60 w-4">{index + 1}.</span>
                   <span className="truncate">{player.name}</span>
-                  {player.id === sessionData.hostId && (
-                    <span className="ml-1 text-yellow-400 text-[8px] uppercase font-bold">Host</span>
-                  )}
                 </div>
-                <div className="flex items-center">
-                  {!isGameActive && (
-                    <span className={`w-2 h-2 rounded-full mr-1 ${player.isReady ? 'bg-green-500' : 'bg-red-500'}`} />
-                  )}
-                  <span className="font-semibold">{player.score}</span>
-                </div>
+                <span className="font-semibold">{player.score}</span>
               </div>
             ))}
             {players.length === 0 && (
@@ -824,9 +596,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     );
   };
 
+  // Speed Boost UI
   const renderSpeedBoost = () => {
-    if (!isPlaying) return null;
-    
     const boostActive = isSpeedBoostActive && speedBoostPercentage > 0;
     return (
       <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-[999]">
@@ -844,9 +615,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
               style={{ height: `${speedBoostPercentage}%` }}
             />
             
-            {[0, 1, 2, 3, 4].map((_, i) => (
-              <div key={i} className="w-full h-px bg-white/20" />
-            ))}
+            {/* Boost level markers */}
+            <div className="absolute inset-0 flex flex-col justify-between py-2 pointer-events-none">
+              {[0, 1, 2, 3, 4].map((_, i) => (
+                <div key={i} className="w-full h-px bg-white/20" />
+              ))}
+            </div>
           </div>
           
           <div className="text-xs text-white text-center">
@@ -860,166 +634,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       </div>
     );
   };
-  
-  const renderSessionInfo = () => {
-    if (isGameActive) return null;
-    
-    return (
-      <div className="absolute top-4 transform left-1/2 -translate-x-1/2 z-[999] w-80">
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-lg">Game Room</CardTitle>
-              {isHost && (
-                <Badge variant="outline" className="font-normal text-xs bg-yellow-500/10 text-yellow-400 border-yellow-400/20">
-                  Host
-                </Badge>
-              )}
-            </div>
-            <CardDescription>
-              Share this code with friends to join:
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pb-3">
-            <div className="flex gap-2 items-center mb-3">
-              <div className="flex-1 px-3 py-1.5 bg-black/20 rounded-md font-mono text-center text-lg font-semibold">
-                {sessionData.sessionCode}
-              </div>
-              <Button 
-                size="icon" 
-                variant="outline" 
-                className="h-9 w-9" 
-                onClick={copySessionCode}
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-            </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={copySessionLink} 
-              className="w-full text-xs"
-            >
-              Copy Invite Link
-            </Button>
-          </CardContent>
-          <CardFooter className="flex justify-between border-t pt-3">
-            <div className="flex items-center gap-1.5 text-sm">
-              <Users className="h-4 w-4" />
-              <span>{players.length} Players</span>
-            </div>
-            {isGameActive ? (
-              <Badge>Game in progress</Badge>
-            ) : (
-              <div className="flex gap-2">
-                <Button 
-                  variant={isReady ? "destructive" : "default"}
-                  size="sm"
-                  onClick={handleToggleReady}
-                >
-                  {isReady ? "Not Ready" : "Ready"}
-                </Button>
-                {isHost && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    disabled={!canStartGame}
-                    onClick={handleForceStart}
-                  >
-                    Start Game
-                  </Button>
-                )}
-              </div>
-            )}
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  };
-  
-  const renderCountdown = () => {
-    if (countdown === null) return null;
-    
-    return (
-      <div className="fixed inset-0 flex items-center justify-center z-[1000] pointer-events-none">
-        <div className="text-9xl font-bold text-white/90 animate-pulse">
-          {countdown}
-        </div>
-      </div>
-    );
-  };
-  
-  const renderWinner = () => {
-    if (!winner) return null;
-    
-    return (
-      <div className="fixed inset-0 flex items-center justify-center z-[1000] pointer-events-none">
-        <div className="bg-black/50 backdrop-blur-sm px-8 py-6 rounded-2xl text-center">
-          <div className="text-2xl font-bold text-white mb-2">
-            {winner.name} Wins!
-          </div>
-          <div className="flex items-center justify-center gap-2 text-yellow-400">
-            <Trophy className="h-5 w-5" />
-            <span className="text-xl font-semibold">{winner.score} points</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
-  const renderLeaveButton = () => {
-    if (isGameActive) return null;
-    
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleLeaveSession}
-        className="absolute top-4 left-4 bg-black/40 backdrop-blur-md border-white/20 text-white z-[999]"
-      >
-        <Home className="h-4 w-4 mr-1.5" />
-        Leave Room
-      </Button>
-    );
-  };
-
-  // Button to manually reset camera position - made more prominent and added state indicator
-  const renderForceResetButton = () => {
-    if (!isPlaying) return null;
-    
-    return (
-      <Button
-        variant="default"
-        size="sm"
-        onClick={handleForceCenter}
-        className={`fixed z-[9999] bottom-20 left-1/2 transform -translate-x-1/2 px-4 py-2 shadow-lg ${
-          cameraCentered ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700 animate-pulse'
-        }`}
-      >
-        {cameraCentered ? 'Camera Centered' : 'Center Camera'}
-      </Button>
-    );
-  };
-
-  // Debug info overlay for development (can be removed in production)
-  const renderDebugInfo = () => {
-    if (!isPlaying) return null;
-    
-    return (
-      <div className="fixed z-[9999] top-4 right-4 bg-black/70 text-white p-2 rounded text-xs">
-        <div>Player ID: {sessionData.clientId}</div>
-        <div>Players: {players.length}</div>
-        <div>Camera Centered: {cameraCentered ? 'Yes' : 'No'}</div>
-        <div>Current Position: {currentPlayer?.snake?.[0] ? `${currentPlayer.snake[0].x},${currentPlayer.snake[0].y}` : 'Unknown'}</div>
-      </div>
-    );
-  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <button
         onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        className="fixed bottom-4 left-4 p-2 rounded-lg bg-gray-200/80 dark:bg-gray-700/80 border-2 border-gray-300 dark:border-gray-600 z-[999]"
+        className="fixed top-4 left-4 p-2 rounded-lg bg-gray-200/80 dark:bg-gray-700/80 border-2 border-gray-300 dark:border-gray-600 z-[999]"
       >
         {theme === 'dark' ? (
           <Sun className="w-6 h-6 text-gray-700 dark:text-gray-200" />
@@ -1028,32 +648,55 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
         )}
       </button>
 
-      {renderLeaveButton()}
-      {renderSessionInfo()}
+      {!isPlaying && !gameOver && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-6 max-w-sm w-full">
+            <h2 className="text-2xl font-bold text-center text-white mb-6">Welcome to Snake Game</h2>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="playerName" className="block text-sm font-medium text-white/80 mb-2">
+                  Enter your name
+                </label>
+                <input
+                  type="text"
+                  id="playerName"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-900/60 border border-white/20 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Your name"
+                  maxLength={15}
+                />
+              </div>
+              <button
+                onClick={handleStartGame}
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mt-4"
+              >
+                <Play className="w-5 h-5" />
+                Start Game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {renderMinimap()}
       {renderPlayerScore()}
       {renderLeaderboard()}
       {renderSpeedBoost()}
-      {renderCountdown()}
-      {renderWinner()}
-      {renderForceResetButton()}
-      {renderDebugInfo()}
 
-      {/* Game Area - Fixed position relative to viewport */}
       <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
         <div className="relative w-full h-full">
           {createHashPattern()}
-          
-          {/* Game Container - This will be translated to follow the player */}
           <div
-            ref={gameContainerRef}
-            className="absolute z-10 will-change-transform game-container"
+            className="absolute game-container"
             style={{
               width: GRID_SIZE * CELL_SIZE,
               height: GRID_SIZE * CELL_SIZE,
+              transform: currentPlayer?.snake?.[0] ?
+                getViewportTransform(currentPlayer.snake[0]) :
+                'translate3d(0, 0, 0)',
               willChange: 'transform',
-              transform: 'translate3d(0, 0, 0)',
-              transition: 'transform 60ms linear',
+              transition: 'transform 150ms linear'
             }}
           >
             <div
@@ -1067,7 +710,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
               }}
             />
 
-            {/* Yellow Dots */}
+            {/* Yellow dots with map icon */}
             {yellowDots.map((dot, index) => (
               <div
                 key={`yellodot-${index}`}
@@ -1077,13 +720,13 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
                   height: CELL_SIZE - 2,
                   left: dot.x * CELL_SIZE,
                   top: dot.y * CELL_SIZE,
+                  transform: 'translate3d(0, 0, 0)',
                 }}
               >
                 <Map className="w-2 h-2 text-white" />
               </div>
             ))}
 
-            {/* Snakes */}
             {players.map(player => (
               player.snake.map((segment: Position, index: number) => (
                 <div
@@ -1097,6 +740,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
                     opacity: player.isPlaying ? 
                       Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1) : 
                       INACTIVE_PLAYER_OPACITY,
+                    transform: 'translate3d(0, 0, 0)',
                     transition: 'all 150ms linear'
                   }}
                 >
@@ -1123,7 +767,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
                   )}
                   {index > 0 && (
                     <div
-                      className={`w-full h-full rounded-sm ${player.id === sessionData.clientId ?
+                      className={`w-full h-full rounded-sm ${player.id === playerId ?
                         'bg-gray-800 dark:bg-gray-200' :
                         'bg-red-500 dark:bg-red-400'
                       }`}
@@ -1133,7 +777,6 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
               ))
             ))}
 
-            {/* Food */}
             {foods.map((food, index) => (
               <div
                 key={`food-${index}`}
@@ -1144,11 +787,12 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
                   height: CELL_SIZE - 2,
                   left: food.x * CELL_SIZE,
                   top: food.y * CELL_SIZE,
+                  transform: 'translate3d(0, 0, 0)',
                 }}
               />
             ))}
 
-            {/* Portals */}
+            {/* Portals with lightning icon */}
             {portals.map((portal, index) => (
               <div
                 key={`portal-${index}`}
@@ -1159,6 +803,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
                   left: portal.x * CELL_SIZE,
                   top: portal.y * CELL_SIZE,
                   boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)',
+                  transform: 'translate3d(0, 0, 0)',
                 }}
               >
                 <Zap className="w-2 h-2 text-white" />
@@ -1168,49 +813,67 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
         </div>
       </div>
 
-      {/* Mobile controls */}
-      {isPlaying && (
-        <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-64 h-64 z-[999]">
-          <button
-            className="absolute top-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-            onClick={() => handleDirection('UP')}
-          >
-            <ArrowUp className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-          </button>
+      <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-64 h-64 z-[999]">
+        <button
+          className="absolute top-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
+          onClick={() => handleDirection('UP')}
+        >
+          <ArrowUp className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        </button>
 
-          <button
-            className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-            onClick={() => handleDirection('LEFT')}
-          >
-            <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-          </button>
+        <button
+          className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
+          onClick={() => handleDirection('LEFT')}
+        >
+          <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        </button>
 
-          <button
-            className="absolute right-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-            onClick={() => handleDirection('RIGHT')}
-          >
-            <ArrowRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-          </button>
+        <button
+          className="absolute right-0 top-1/2 -translate-y-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
+          onClick={() => handleDirection('RIGHT')}
+        >
+          <ArrowRight className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        </button>
 
-          <button
-            className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
-            onClick={() => handleDirection('DOWN')}
-          >
-            <ArrowDown className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-          </button>
+        <button
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-4 bg-gray-200/80 dark:bg-gray-700/80 rounded-lg active:bg-gray-300 dark:active:bg-gray-600 border-2 border-gray-300 dark:border-gray-600"
+          onClick={() => handleDirection('DOWN')}
+        >
+          <ArrowDown className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        </button>
 
-          <button
-            className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${currentPlayer?.speedBoostPercentage > 0
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
-              } border-2 border-gray-300 dark:border-gray-600`}
-            onTouchStart={() => {
-              if (currentPlayer?.speedBoostPercentage > 0) setIsSpeedBoostActive(true);
-            }}
-            onTouchEnd={() => setIsSpeedBoostActive(false)}
-          >
-            BOOST
-          </button>
+        <button
+          className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-4 rounded-full ${currentPlayer?.speedBoostPercentage > 0
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+            } border-2 border-gray-300 dark:border-gray-600`}
+          onTouchStart={() => {
+            if (currentPlayer?.speedBoostPercentage > 0) setIsSpeedBoostActive(true);
+          }}
+          onTouchEnd={() => setIsSpeedBoostActive(false)}
+        >
+          BOOST
+        </button>
+      </div>
+
+      {gameOver && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-[1000]">
+          <div className="bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-6 max-w-sm w-full text-center">
+            <h2 className="text-2xl font-bold mb-4 text-white">Game Over</h2>
+            <div className="flex justify-center items-center space-x-2 mb-6">
+              <Trophy className="w-5 h-5 text-yellow-400" />
+              <p className="text-white text-xl font-semibold">Score: {score}</p>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Play className="w-4 h-4" />
+                Play Again
+              </div>
+            </button>
+          </div>
         </div>
       )}
     </div>
