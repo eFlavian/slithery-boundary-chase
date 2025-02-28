@@ -89,17 +89,17 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
       
       return () => clearTimeout(timer);
     } else if (countdown === 0) {
-      console.log("Countdown reached 0, calling onGameStart directly");
+      console.log("Countdown reached 0, FORCING game start");
       // Force game to start immediately when countdown reaches 0
       onGameStart();
     }
   }, [countdown, onGameStart]);
 
-  // Check if game has started from the server
+  // Force game start when server says game has started
   useEffect(() => {
     if (sessionState?.gameStarted) {
-      console.log("Game marked as started in session state, calling onGameStart directly");
-      // Force the game to start if server says it has started
+      console.log("Game marked as started in session state, FORCING game start");
+      // Force game start no matter what if the server says it's started
       onGameStart();
     }
   }, [sessionState?.gameStarted, onGameStart]);
@@ -216,6 +216,12 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
         {countdown !== null && (
           <div className="bg-blue-100 p-3 rounded-md text-center">
             <p>Game starting in: <span className="font-bold text-xl">{countdown}</span> seconds</p>
+          </div>
+        )}
+
+        {sessionState.gameStarted && (
+          <div className="bg-green-100 p-3 rounded-md text-center">
+            <p>Game started! Launching game...</p>
           </div>
         )}
       </CardContent>

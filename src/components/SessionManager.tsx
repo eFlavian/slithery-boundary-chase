@@ -94,6 +94,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
               description: `Session code: ${data.data.joinCode}`
             });
             if (playerId && wsConnection) {
+              // Explicitly set player to not ready when creating a session
               wsConnection.send(JSON.stringify({
                 type: 'setReady',
                 playerId,
@@ -108,6 +109,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
               description: `Session code: ${data.data.joinCode}`
             });
             if (playerId && wsConnection) {
+              // Explicitly set player to not ready when joining a session
               wsConnection.send(JSON.stringify({
                 type: 'setReady',
                 playerId,
@@ -118,8 +120,9 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
             
           case 'sessionState':
             setSessionState(data.data);
+            // Force game start if server says game has started
             if (data.data.gameStarted) {
-              console.log("Game marked as started in sessionState, triggering onGameStart");
+              console.log("Game marked as started in sessionState, FORCING game start");
               onGameStart();
             }
             break;
@@ -133,8 +136,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
             break;
             
           case 'gameStart':
-            console.log("Received gameStart message, directly starting game");
-            // Directly call onGameStart to ensure game starts
+            console.log("Received gameStart message, FORCING game start");
+            // Force start the game when server sends gameStart
             onGameStart();
             break;
         }
