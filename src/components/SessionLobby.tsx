@@ -50,7 +50,7 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
 
   // Watch for all players ready condition
   useEffect(() => {
-    if (sessionState && allReady && isHost && !sessionState.gameStarted) {
+    if (sessionState && allReady && isHost && !sessionState.gameStarted && sessionState.players.length > 0) {
       // Host sends start game signal when all players are ready
       wsConnection?.send(JSON.stringify({
         type: 'startGame',
@@ -83,6 +83,14 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
       onGameStart();
     }
   }, [countdown, onGameStart]);
+
+  // Check if game has started from the server
+  useEffect(() => {
+    if (sessionState?.gameStarted) {
+      console.log("Game marked as started in session state, starting game");
+      onGameStart();
+    }
+  }, [sessionState?.gameStarted, onGameStart]);
 
   const updateName = () => {
     if (localName.trim() && localName !== playerName) {

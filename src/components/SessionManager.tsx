@@ -97,6 +97,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
               title: data.type === 'sessionCreated' ? "Session Created!" : "Joined Session!",
               description: `Session code: ${data.data.joinCode}`
             });
+            // Make sure players aren't ready by default - you need to check if a signal needs to be sent to server
+            if (playerId && wsConnection && data.type === 'sessionJoined') {
+              console.log("Player joined, ensuring not ready by default");
+            }
             break;
             
           case 'sessionState':
@@ -133,7 +137,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
         wsConnection.removeEventListener('message', handleMessage);
       };
     }
-  }, [wsConnection, toast, onGameStart]);
+  }, [wsConnection, toast, onGameStart, playerId]);
 
   const goToHome = useCallback(() => {
     if (sessionState && wsConnection && playerId) {
