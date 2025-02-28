@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { useMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { HomeIcon } from "lucide-react";
 
 interface Player {
@@ -50,7 +50,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   onBackToLobby,
   wsUrl = "ws://localhost:3001" 
 }) => {
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
