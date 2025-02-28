@@ -83,6 +83,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
   const minimapTimerRef = useRef<number>();
   const minimapBlinkRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
+  const isCameraInitializedRef = useRef<boolean>(false);
 
   useEffect(() => {
     const ws = sessionData.ws;
@@ -154,6 +155,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
           setIsPlaying(true);
           setGameOver(false);
           setIsReady(false);
+          isCameraInitializedRef.current = false; // Reset camera initialization flag
           toast.success('Game started!');
           break;
           
@@ -244,6 +246,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
       }
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
       clearInterval(statePollingInterval); // Clear the polling interval on cleanup
     };
@@ -448,6 +453,29 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     return `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
   };
 
+  // Reset camera position when game starts or when player changes
+  useEffect(() => {
+    if (isPlaying && currentPlayer?.snake?.[0] && !isCameraInitializedRef.current) {
+      const containerWidth = window.innerWidth;
+      const containerHeight = window.innerHeight;
+
+      // Set camera directly to player position
+      cameraPositionRef.current = {
+        x: containerWidth / 2 - (currentPlayer.snake[0].x * CELL_SIZE),
+        y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
+      };
+      
+      // Update camera container if it exists
+      const container = document.querySelector('.game-container') as HTMLDivElement;
+      if (container) {
+        container.style.transform = `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
+      }
+      
+      isCameraInitializedRef.current = true;
+    }
+  }, [isPlaying, currentPlayer]);
+
+  // Main camera update logic
   const updateCamera = () => {
     if (currentPlayer?.snake?.[0]) {
       const container = document.querySelector('.game-container') as HTMLDivElement;
@@ -458,8 +486,11 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     animationFrameRef.current = requestAnimationFrame(updateCamera);
   };
 
+  // Start the camera update loop
   useEffect(() => {
-    updateCamera();
+    // Start animation frame for camera updates
+    animationFrameRef.current = requestAnimationFrame(updateCamera);
+    
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -467,17 +498,23 @@ const GameBoard: React.FC<GameBoardProps> = ({ sessionData, onLeaveGame }) => {
     };
   }, []);
 
+  // Update camera reference when game state changes
   useEffect(() => {
-    if (currentPlayer?.snake?.[0]) {
-      const containerWidth = window.innerWidth;
-      const containerHeight = window.innerHeight;
+    if (players.length > 0 && !isCameraInitializedRef.current) {
+      // Try to initialize camera when players data is available
+      if (currentPlayer?.snake?.[0]) {
+        const containerWidth = window.innerWidth;
+        const containerHeight = window.innerHeight;
 
-      cameraPositionRef.current = {
-        x: containerWidth / 2 - (currentPlayer.snake[0].x * CELL_SIZE),
-        y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
-      };
+        cameraPositionRef.current = {
+          x: containerWidth / 2 - (currentPlayer.snake[0].x * CELL_SIZE),
+          y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
+        };
+        
+        isCameraInitializedRef.current = true;
+      }
     }
-  }, [currentPlayer]);
+  }, [players, currentPlayer]);
 
   const renderMinimap = () => {
     if (!isMinimapVisible) return null;
