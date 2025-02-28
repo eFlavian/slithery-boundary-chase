@@ -92,14 +92,32 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
             break;
             
           case 'sessionCreated':
-          case 'sessionJoined':
             toast({
-              title: data.type === 'sessionCreated' ? "Session Created!" : "Joined Session!",
+              title: "Session Created!",
               description: `Session code: ${data.data.joinCode}`
             });
-            // Make sure players aren't ready by default - you need to check if a signal needs to be sent to server
-            if (playerId && wsConnection && data.type === 'sessionJoined') {
-              console.log("Player joined, ensuring not ready by default");
+            // Explicitly set that the player is NOT ready when creating a session
+            if (playerId && wsConnection) {
+              wsConnection.send(JSON.stringify({
+                type: 'setReady',
+                playerId,
+                isReady: false
+              }));
+            }
+            break;
+            
+          case 'sessionJoined':
+            toast({
+              title: "Joined Session!",
+              description: `Session code: ${data.data.joinCode}`
+            });
+            // Explicitly set that the player is NOT ready when joining a session
+            if (playerId && wsConnection) {
+              wsConnection.send(JSON.stringify({
+                type: 'setReady',
+                playerId,
+                isReady: false
+              }));
             }
             break;
             

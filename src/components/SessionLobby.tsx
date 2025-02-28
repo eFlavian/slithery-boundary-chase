@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,10 +46,11 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
   const isReady = sessionState?.players.find(p => p.id === playerId)?.isReady || false;
   const allReady = sessionState?.players.every(p => p.isReady) || false;
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [gameStarting, setGameStarting] = useState(false);
 
   // Watch for all players ready condition
   useEffect(() => {
-    if (sessionState && allReady && isHost && !sessionState.gameStarted && sessionState.players.length > 0) {
+    if (sessionState && allReady && isHost && !sessionState.gameStarted && !gameStarting && sessionState.players.length > 0) {
       // Host sends start game signal when all players are ready
       wsConnection?.send(JSON.stringify({
         type: 'startGame',
@@ -63,9 +63,10 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
       });
       
       // Start the countdown immediately when all players are ready
+      setGameStarting(true);
       setCountdown(3);
     }
-  }, [allReady, isHost, playerId, sessionState, wsConnection, toast]);
+  }, [allReady, isHost, playerId, sessionState, wsConnection, toast, gameStarting]);
 
   // Handle countdown timer
   useEffect(() => {
@@ -80,17 +81,18 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
     } else if (countdown === 0) {
       // When countdown reaches 0, directly trigger game start
       console.log("Countdown reached 0, starting game");
-      onGameStart();
+      onGameStart(); // This will immediately start the game
     }
   }, [countdown, onGameStart]);
 
   // Check if game has started from the server
   useEffect(() => {
-    if (sessionState?.gameStarted) {
+    if (sessionState?.gameStarted && !gameStarting) {
       console.log("Game marked as started in session state, starting game");
-      onGameStart();
+      setGameStarting(true);
+      onGameStart(); // This will immediately start the game
     }
-  }, [sessionState?.gameStarted, onGameStart]);
+  }, [sessionState?.gameStarted, onGameStart, gameStarting]);
 
   const updateName = () => {
     if (localName.trim() && localName !== playerName) {
