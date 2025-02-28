@@ -1,3 +1,4 @@
+
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -10,6 +11,7 @@ const wss = new WebSocketServer({ server });
 // Sessions management
 const sessions = new Map(); // Store active game sessions
 const clientToSession = new Map(); // Map clients to their sessions
+const sessionCodes = new Map(); // Map session codes to session IDs for faster lookup
 
 // Game state per session
 const getNewGameState = () => ({
@@ -190,7 +192,7 @@ function createSession(hostId, hostName) {
   let sessionCode;
   do {
     sessionCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-  } while (Array.from(sessions.values()).some(s => s.code === sessionCode));
+  } while (sessionCodes.has(sessionCode));
   
   const sessionId = uuidv4();
   const newSession = {
@@ -203,16 +205,30 @@ function createSession(hostId, hostName) {
   };
   
   sessions.set(sessionId, newSession);
+  sessionCodes.set(sessionCode, sessionId); // Map code to ID for lookup
+  
+  console.log(`Session created: ${sessionId} with code ${sessionCode} by ${hostName} (${hostId})`);
   return newSession;
 }
 
 function joinSession(sessionCode, clientId) {
-  // Find session by code
-  const session = Array.from(sessions.values()).find(s => s.code === sessionCode);
-  if (!session) return null;
+  // Find session by code using the map lookup
+  const sessionId = sessionCodes.get(sessionCode);
+  if (!sessionId) {
+    console.log(`Session not found with code: ${sessionCode}`);
+    return null;
+  }
+  
+  const session = sessions.get(sessionId);
+  if (!session) {
+    console.log(`Session with ID ${sessionId} not found (code mismatch?)`);
+    sessionCodes.delete(sessionCode); // Clean up invalid mapping
+    return null;
+  }
   
   // Map this client to the session
   clientToSession.set(clientId, session.id);
+  console.log(`Client ${clientId} joined session ${sessionId} with code ${sessionCode}`);
   return session;
 }
 
@@ -230,6 +246,11 @@ function cleanupSession(sessionId) {
   // Remove player mappings
   for (const playerId of session.players.keys()) {
     clientToSession.delete(playerId);
+  }
+  
+  // Remove from code map
+  if (session.code) {
+    sessionCodes.delete(session.code);
   }
   
   // Delete the session
@@ -460,7 +481,7 @@ wss.on('connection', (ws) => {
           session.readyPlayers.delete(clientId);
           clientToSession.delete(clientId);
           
-          // If host leaves, assign a new host or clean up session
+          // If host leaves, assign a new host or delete the session
           if (session.hostId === clientId) {
             const remainingPlayers = Array.from(session.players.keys());
             if (remainingPlayers.length > 0) {

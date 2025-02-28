@@ -25,6 +25,18 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [clientId, setClientId] = useState<string | null>(null);
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+  const [joinCodeFromUrl, setJoinCodeFromUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check if there's a join code in the URL
+    const params = new URLSearchParams(window.location.search);
+    const joinCode = params.get('join');
+    
+    if (joinCode) {
+      setSessionCode(joinCode);
+      setJoinCodeFromUrl(joinCode);
+    }
+  }, []);
 
   useEffect(() => {
     // Connect to WebSocket server
@@ -37,6 +49,11 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
     ws.onopen = () => {
       setIsConnected(true);
       setWsConnection(ws);
+      
+      // If we have a join code from URL and we're now connected, try to auto-join
+      if (joinCodeFromUrl && playerName.trim()) {
+        handleJoinSession(joinCodeFromUrl);
+      }
     };
     
     ws.onmessage = (event) => {
@@ -84,7 +101,14 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
     return () => {
       ws.close();
     };
-  }, [onJoinSession, playerName]);
+  }, [onJoinSession, playerName, joinCodeFromUrl, clientId]);
+  
+  // Auto-attempt to join when clientId is set and we have a joinCodeFromUrl
+  useEffect(() => {
+    if (isConnected && clientId && joinCodeFromUrl && playerName.trim() && !loading) {
+      handleJoinSession(joinCodeFromUrl);
+    }
+  }, [clientId, isConnected, joinCodeFromUrl, playerName]);
   
   // Refresh the session list periodically
   useEffect(() => {
@@ -158,16 +182,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
     navigator.clipboard.writeText(url);
     toast.success('Invite link copied to clipboard');
   };
-  
-  // Check if there's a join code in the URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const joinCode = params.get('join');
-    
-    if (joinCode) {
-      setSessionCode(joinCode);
-    }
-  }, []);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
@@ -202,7 +216,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onJoinSession }) => {
           </div>
         </div>
         
-        <Tabs defaultValue="create">
+        <Tabs defaultValue={joinCodeFromUrl ? "join" : "create"}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="create">Create Game</TabsTrigger>
             <TabsTrigger value="join">Join Game</TabsTrigger>
