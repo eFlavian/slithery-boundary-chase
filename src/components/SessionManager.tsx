@@ -104,6 +104,11 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
             // Check if game is marked as started
             if (data.data.gameStarted) {
               console.log("Game marked as started in sessionState");
+              // If game is started, we should directly trigger the game start
+              // after a short delay to allow for UI updates
+              setTimeout(() => {
+                onGameStart();
+              }, 100);
             }
             break;
             

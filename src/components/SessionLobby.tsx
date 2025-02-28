@@ -61,16 +61,11 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
         title: "All players ready!",
         description: "Starting game in 3 seconds...",
       });
-    }
-  }, [allReady, isHost, playerId, sessionState, wsConnection, toast]);
-
-  // Watch for game started state
-  useEffect(() => {
-    if (sessionState?.gameStarted) {
-      // Start countdown when game is marked as started
+      
+      // Start the countdown immediately when all players are ready
       setCountdown(3);
     }
-  }, [sessionState?.gameStarted]);
+  }, [allReady, isHost, playerId, sessionState, wsConnection, toast]);
 
   // Handle countdown timer
   useEffect(() => {
@@ -83,7 +78,7 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
       
       return () => clearTimeout(timer);
     } else if (countdown === 0) {
-      // When countdown reaches 0, trigger game start
+      // When countdown reaches 0, directly trigger game start
       onGameStart();
     }
   }, [countdown, onGameStart]);
@@ -200,12 +195,6 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
         {countdown !== null && (
           <div className="bg-blue-100 p-3 rounded-md text-center">
             <p>Game starting in: <span className="font-bold text-xl">{countdown}</span> seconds</p>
-          </div>
-        )}
-
-        {allReady && !sessionState.gameStarted && (
-          <div className="bg-green-100 p-3 rounded-md text-center">
-            <p>All players ready! {isHost ? "Starting game soon..." : "Waiting for host to start..."}</p>
           </div>
         )}
       </CardContent>
