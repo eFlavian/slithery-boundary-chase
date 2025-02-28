@@ -50,6 +50,14 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
   const [countdown, setCountdown] = useState<number | null>(null);
   const [gameStarting, setGameStarting] = useState(false);
 
+  // Immediately trigger game start if the server says the game started
+  useEffect(() => {
+    if (sessionState?.gameStarted) {
+      console.log("IMPORTANT: Server says game already started - IMMEDIATE force start");
+      onGameStart();
+    }
+  }, [sessionState?.gameStarted, onGameStart]);
+
   // Watch for all players ready condition
   useEffect(() => {
     if (
@@ -89,20 +97,11 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
       
       return () => clearTimeout(timer);
     } else if (countdown === 0) {
-      console.log("Countdown reached 0, FORCING game start");
+      console.log("CRITICAL: Countdown reached 0 - DIRECTLY starting game");
       // Force game to start immediately when countdown reaches 0
       onGameStart();
     }
   }, [countdown, onGameStart]);
-
-  // Force game start when server says game has started
-  useEffect(() => {
-    if (sessionState?.gameStarted) {
-      console.log("Game marked as started in session state, FORCING game start");
-      // Force game start no matter what if the server says it's started
-      onGameStart();
-    }
-  }, [sessionState?.gameStarted, onGameStart]);
 
   const updateName = () => {
     if (localName.trim() && localName !== playerName) {
@@ -147,6 +146,12 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
         description: "Share this code with your friends so they can join your game.",
       });
     }
+  };
+
+  // Emergency start game function for debugging
+  const emergencyStartGame = () => {
+    console.log("EMERGENCY: Manual game start triggered by user");
+    onGameStart();
   };
 
   if (!sessionState) {
@@ -222,6 +227,26 @@ const SessionLobby: React.FC<SessionLobbyProps> = ({
         {sessionState.gameStarted && (
           <div className="bg-green-100 p-3 rounded-md text-center">
             <p>Game started! Launching game...</p>
+            <Button 
+              className="mt-2" 
+              variant="destructive"
+              onClick={emergencyStartGame}
+            >
+              Force Start Now
+            </Button>
+          </div>
+        )}
+
+        {isHost && allPlayersReady && hasMultiplePlayers && !gameStarting && !sessionState.gameStarted && (
+          <div className="bg-yellow-100 p-3 rounded-md text-center">
+            <p>All players ready! Waiting for game to start...</p>
+            <Button 
+              className="mt-2" 
+              variant="outline"
+              onClick={emergencyStartGame}
+            >
+              Force Start Game
+            </Button>
           </div>
         )}
       </CardContent>

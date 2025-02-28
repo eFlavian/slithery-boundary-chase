@@ -38,6 +38,12 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  // Force game start function to ensure it happens no matter what
+  const forceGameStart = useCallback(() => {
+    console.log("FORCE GAME START called - absolute final trigger");
+    onGameStart();
+  }, [onGameStart]);
+
   useEffect(() => {
     const connectWebSocket = () => {
       const ws = new WebSocket(wsUrl);
@@ -123,7 +129,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
             // Force game start if server says game has started
             if (data.data.gameStarted) {
               console.log("Game marked as started in sessionState, FORCING game start");
-              onGameStart();
+              forceGameStart();
             }
             break;
             
@@ -138,7 +144,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
           case 'gameStart':
             console.log("Received gameStart message, FORCING game start");
             // Force start the game when server sends gameStart
-            onGameStart();
+            forceGameStart();
             break;
         }
       } catch (error) {
@@ -152,7 +158,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
         wsConnection.removeEventListener('message', handleMessage);
       };
     }
-  }, [wsConnection, toast, onGameStart, playerId]);
+  }, [wsConnection, toast, forceGameStart, playerId]);
 
   const goToHome = useCallback(() => {
     if (sessionState && wsConnection && playerId) {
@@ -184,7 +190,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ wsUrl, onGameStart }) =
           setPlayerName={setPlayerName}
           sessionState={sessionState}
           wsConnection={wsConnection}
-          onGameStart={onGameStart}
+          onGameStart={forceGameStart}
         />
       </div>
     );
