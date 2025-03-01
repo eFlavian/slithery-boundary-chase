@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import ThemeToggle from './game/ThemeToggle';
 import GameControls from './game/GameControls';
@@ -27,7 +27,6 @@ const CAMERA_SMOOTHING = 0.55;
 const MIN_SNAKE_OPACITY = 0.3;
 const MINIMAP_SIZE = 150;
 const INACTIVE_PLAYER_OPACITY = 0.2;
-const KEY_DEBOUNCE = 50;
 
 const GameBoard: React.FC = () => {
   const {
@@ -57,81 +56,70 @@ const GameBoard: React.FC = () => {
   const cameraPositionRef = useRef({ x: 0, y: 0 });
   const lastUpdateTime = useRef(0);
   const animationFrameRef = useRef<number>();
-  const directionRef = useRef<Direction>('RIGHT');
 
-  // Move the currentPlayer declaration here, before it's used
-  const currentPlayer = players.find(p => p.id === playerId);
-  const score = currentPlayer?.score || 0;
-  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
-
-  // Update the ref whenever the state changes
-  useEffect(() => {
-    directionRef.current = direction;
-  }, [direction]);
-
-  const handleStartGame = useCallback(() => {
+  const handleStartGame = () => {
     if (!playerName.trim()) {
       toast.error("Please enter a name first!");
       return;
     }
 
     startGame(playerName.trim());
-  }, [playerName, startGame]);
+  };
 
-  const handleDirection = useCallback((newDirection: Direction) => {
-    const oppositeDirections: Record<Direction, Direction> = {
+  const handleDirection = (newDirection: Direction) => {
+    const oppositeDirections = {
       'UP': 'DOWN',
       'DOWN': 'UP',
       'LEFT': 'RIGHT',
       'RIGHT': 'LEFT'
     };
     
-    if (oppositeDirections[directionRef.current] === newDirection) {
+    if (oppositeDirections[direction] === newDirection) {
       return;
     }
 
-    if (directionRef.current !== newDirection) {
+    if (direction !== newDirection) {
       setDirection(newDirection);
       sendDirection(newDirection);
       updateGame();
     }
-  }, [sendDirection]);
+  };
 
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+  const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key.startsWith('Arrow')) {
       event.preventDefault();
     }
 
     const now = Date.now();
-    if (now - lastKeyPress.current < KEY_DEBOUNCE) return;
+    if (now - lastKeyPress.current < 50) return;
     lastKeyPress.current = now;
 
     switch (event.key.toLowerCase()) {
       case 'arrowup':
       case 'w':
         event.preventDefault();
-        if (directionRef.current !== 'DOWN') {
+        if (direction !== 'DOWN') {
           handleDirection('UP');
         }
         break;
       case 'arrowdown':
       case 's':
         event.preventDefault();
-        if (directionRef.current !== 'UP') {
+        if (direction !== 'UP') {
           handleDirection('DOWN');
         }
         break;
       case 'arrowleft':
       case 'a':
         event.preventDefault();
-        if (directionRef.current !== 'RIGHT') {
+        if (direction !== 'RIGHT') {
           handleDirection('LEFT');
         }
         break;
       case 'arrowright':
       case 'd':
         event.preventDefault();
-        if (directionRef.current !== 'LEFT') {
+        if (direction !== 'LEFT') {
           handleDirection('RIGHT');
         }
         break;
@@ -142,15 +130,15 @@ const GameBoard: React.FC = () => {
         }
         break;
     }
-  }, [handleDirection, currentPlayer]);
+  };
 
-  const handleKeyUp = useCallback((event: KeyboardEvent) => {
+  const handleKeyUp = (event: KeyboardEvent) => {
     if (event.key === ' ') {
       setIsSpeedBoostActive(false);
     }
-  }, []);
+  };
 
-  const updateGame = useCallback(() => {
+  const updateGame = () => {
     sendUpdate();
 
     if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage > 0) {
@@ -158,37 +146,23 @@ const GameBoard: React.FC = () => {
     } else if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage <= 0) {
       setIsSpeedBoostActive(false);
     }
-  }, [isSpeedBoostActive, currentPlayer, sendUpdate, sendSpeedBoost]);
+  };
 
-  // Memoize game loop setup/teardown
   useEffect(() => {
     if (!gameOver && playerId && isPlaying) {
       const speed = isSpeedBoostActive ? INITIAL_SPEED / 2 : INITIAL_SPEED;
-      
-      if (gameLoop.current) {
-        clearInterval(gameLoop.current);
-      }
-      
       gameLoop.current = window.setInterval(updateGame, speed);
-      return () => {
-        if (gameLoop.current) {
-          clearInterval(gameLoop.current);
-        }
-      };
+      return () => clearInterval(gameLoop.current);
     }
-  }, [gameOver, isSpeedBoostActive, playerId, isPlaying, updateGame]);
+  }, [gameOver, direction, isSpeedBoostActive, playerId, isPlaying]);
 
-  // Remove these lines since we moved them above
-  // const currentPlayer = players.find(p => p.id === playerId);
-  // const score = currentPlayer?.score || 0;
-  // const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
+  const currentPlayer = players.find(p => p.id === playerId);
+  const score = currentPlayer?.score || 0;
+  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
 
-  // Memoized lerp function for smoother camera transitions
-  const lerp = useCallback((start: number, end: number, t: number) => 
-    start + (end - start) * t, []);
+  const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
 
-  // Optimized viewport transform calculation
-  const getViewportTransform = useCallback((snakeHead: Position) => {
+  const getViewportTransform = (snakeHead: Position) => {
     const containerWidth = window.innerWidth;
     const containerHeight = window.innerHeight;
 
@@ -208,10 +182,9 @@ const GameBoard: React.FC = () => {
     cameraPositionRef.current.y = lerp(cameraPositionRef.current.y, targetY, smoothing);
 
     return `translate3d(${Math.round(cameraPositionRef.current.x)}px, ${Math.round(cameraPositionRef.current.y)}px, 0)`;
-  }, [lerp]);
+  };
 
-  // Optimized camera update with requestAnimationFrame
-  const updateCamera = useCallback(() => {
+  const updateCamera = () => {
     if (currentPlayer?.snake?.[0]) {
       const container = document.querySelector('.game-container') as HTMLDivElement;
       if (container) {
@@ -219,16 +192,16 @@ const GameBoard: React.FC = () => {
       }
     }
     animationFrameRef.current = requestAnimationFrame(updateCamera);
-  }, [currentPlayer, getViewportTransform]);
+  };
 
   useEffect(() => {
-    animationFrameRef.current = requestAnimationFrame(updateCamera);
+    updateCamera();
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [updateCamera]);
+  }, []);
 
   useEffect(() => {
     if (currentPlayer?.snake?.[0]) {
@@ -240,16 +213,16 @@ const GameBoard: React.FC = () => {
         y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
       };
     }
-  }, [playerId, currentPlayer]);
+  }, [playerId]);
 
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown, { passive: false });
+    window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [handleKeyDown, handleKeyUp]);
+  }, [direction, currentPlayer?.speedBoostPercentage]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
