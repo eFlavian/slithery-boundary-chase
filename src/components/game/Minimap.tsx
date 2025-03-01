@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { memo } from 'react';
 import { Map } from 'lucide-react';
 
 type MinimapProps = {
@@ -14,6 +14,61 @@ type MinimapProps = {
   GRID_SIZE: number;
 };
 
+// Memoized player marker component
+const PlayerMarker = memo(({ player, isCurrentPlayer, scale, CELL_SIZE }: 
+  { player: any, isCurrentPlayer: boolean, scale: number, CELL_SIZE: number }) => {
+  if (!player.snake?.[0]) return null;
+  
+  return (
+    <div
+      key={`minimap-${player.id}`}
+      className="absolute"
+    >
+      {isCurrentPlayer ? (
+        <>
+          <div
+            className="absolute -translate-x-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap text-blue-600 font-medium"
+            style={{
+              left: (player.snake[0].x * CELL_SIZE * scale),
+              top: (player.snake[0].y * CELL_SIZE * scale) - 10,
+            }}
+          >
+            {player.name}
+          </div>
+          <div
+            className="absolute w-3 h-3 bg-blue-600"
+            style={{
+              left: (player.snake[0].x * CELL_SIZE * scale),
+              top: (player.snake[0].y * CELL_SIZE * scale),
+              transform: `translate(-50%, -50%) rotate(${
+                player.direction === 'UP' ? '0deg' :
+                player.direction === 'RIGHT' ? '90deg' :
+                player.direction === 'DOWN' ? '180deg' : '-90deg'
+              })`,
+              clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
+            }}
+          />
+        </>
+      ) : (
+        <div
+          className="absolute w-3 h-3 bg-red-600"
+          style={{
+            left: (player.snake[0].x * CELL_SIZE * scale),
+            top: (player.snake[0].y * CELL_SIZE * scale),
+            transform: `translate(-50%, -50%) rotate(${
+              player.direction === 'UP' ? '0deg' :
+              player.direction === 'RIGHT' ? '90deg' :
+              player.direction === 'DOWN' ? '180deg' : '-90deg'
+            })`,
+            clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
+          }}
+        />
+      )}
+    </div>
+  );
+});
+
+// Main component
 const Minimap: React.FC<MinimapProps> = ({
   isMinimapVisible,
   minimapTimeLeft,
@@ -29,6 +84,10 @@ const Minimap: React.FC<MinimapProps> = ({
   
   const scale = MINIMAP_SIZE / (GRID_SIZE * CELL_SIZE);
   const blinkClass = minimapTimeLeft <= 3 ? "animate-pulse" : "";
+  
+  // Only render a limited number of food dots on the minimap to save performance
+  const limitedFoods = foods.slice(0, 20);
+  const limitedYellowDots = yellowDots.slice(0, 10);
 
   return (
     <div 
@@ -53,60 +112,17 @@ const Minimap: React.FC<MinimapProps> = ({
         <div className="absolute inset-0 bg-white/90" />
 
         {/* Game elements */}
-        {players.map(player => {
-          const isCurrentPlayer = player.id === playerId;
-          if (!player.snake?.[0]) return null;
-          
-          return (
-            <div
-              key={`minimap-${player.id}`}
-              className="absolute"
-            >
-              {isCurrentPlayer ? (
-                <>
-                  <div
-                    className="absolute -translate-x-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap text-blue-600 font-medium"
-                    style={{
-                      left: (player.snake[0].x * CELL_SIZE * scale),
-                      top: (player.snake[0].y * CELL_SIZE * scale) - 10,
-                    }}
-                  >
-                    {player.name}
-                  </div>
-                  <div
-                    className="absolute w-3 h-3 bg-blue-600"
-                    style={{
-                      left: (player.snake[0].x * CELL_SIZE * scale),
-                      top: (player.snake[0].y * CELL_SIZE * scale),
-                      transform: `translate(-50%, -50%) rotate(${
-                        player.direction === 'UP' ? '0deg' :
-                        player.direction === 'RIGHT' ? '90deg' :
-                        player.direction === 'DOWN' ? '180deg' : '-90deg'
-                      })`,
-                      clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
-                    }}
-                  />
-                </>
-              ) : (
-                <div
-                  className="absolute w-3 h-3 bg-red-600"
-                  style={{
-                    left: (player.snake[0].x * CELL_SIZE * scale),
-                    top: (player.snake[0].y * CELL_SIZE * scale),
-                    transform: `translate(-50%, -50%) rotate(${
-                      player.direction === 'UP' ? '0deg' :
-                      player.direction === 'RIGHT' ? '90deg' :
-                      player.direction === 'DOWN' ? '180deg' : '-90deg'
-                    })`,
-                    clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)'
-                  }}
-                />
-              )}
-            </div>
-          );
-        })}
+        {players.map(player => (
+          <PlayerMarker 
+            key={`player-${player.id}`}
+            player={player} 
+            isCurrentPlayer={player.id === playerId}
+            scale={scale}
+            CELL_SIZE={CELL_SIZE}
+          />
+        ))}
 
-        {foods.map((food, index) => (
+        {limitedFoods.map((food, index) => (
           <div
             key={`minimap-food-${index}`}
             className={`absolute w-1 h-1 rounded-full ${
@@ -119,7 +135,7 @@ const Minimap: React.FC<MinimapProps> = ({
           />
         ))}
         
-        {yellowDots.map((dot, index) => (
+        {limitedYellowDots.map((dot, index) => (
           <div
             key={`minimap-yellowdot-${index}`}
             className="absolute w-1 h-1 rounded-full bg-yellow-600"
@@ -143,4 +159,4 @@ const Minimap: React.FC<MinimapProps> = ({
   );
 };
 
-export default Minimap;
+export default memo(Minimap);

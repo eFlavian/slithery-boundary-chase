@@ -56,6 +56,33 @@
   }
   body {
     @apply bg-background text-foreground;
+    overscroll-behavior: none;
+    touch-action: none;
+  }
+}
+
+/* Performance optimizations */
+.game-container {
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-font-smoothing: subpixel-antialiased;
+}
+
+.will-change-transform {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Reduce animation complexity on mobile */
+@media (max-width: 768px) {
+  .animate-pulse {
+    animation-duration: 3s;
+  }
+  
+  .snake-food {
+    animation: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 }
 
@@ -82,6 +109,7 @@
 /* Mobile Responsive Styles */
 @media (max-width: 768px) {
   #root {
-    padding: 1rem;
+    padding: 0;
   }
 }
+
