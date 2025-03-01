@@ -1,8 +1,11 @@
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import GameBoard from "@/components/GameBoard";
+import SessionManager from "@/components/session/SessionManager";
 
 const Index = () => {
+  const [showSessionManager, setShowSessionManager] = useState(true);
+  
   // Prevent touch devices from zooming when double-tapping the game
   useEffect(() => {
     const preventZoom = (e: TouchEvent) => {
@@ -24,7 +27,12 @@ const Index = () => {
     };
   }, []);
   
-  return <GameBoard />;
+  return (
+    <>
+      {showSessionManager && <SessionManager />}
+      <GameBoard />
+    </>
+  );
 };
 
 export default Index;
