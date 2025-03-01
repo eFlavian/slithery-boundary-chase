@@ -59,6 +59,11 @@ const GameBoard: React.FC = () => {
   const animationFrameRef = useRef<number>();
   const directionRef = useRef<Direction>('RIGHT');
 
+  // Move the currentPlayer declaration here, before it's used
+  const currentPlayer = players.find(p => p.id === playerId);
+  const score = currentPlayer?.score || 0;
+  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
+
   // Update the ref whenever the state changes
   useEffect(() => {
     directionRef.current = direction;
@@ -137,7 +142,7 @@ const GameBoard: React.FC = () => {
         }
         break;
     }
-  }, [handleDirection]);
+  }, [handleDirection, currentPlayer]);
 
   const handleKeyUp = useCallback((event: KeyboardEvent) => {
     if (event.key === ' ') {
@@ -173,9 +178,10 @@ const GameBoard: React.FC = () => {
     }
   }, [gameOver, isSpeedBoostActive, playerId, isPlaying, updateGame]);
 
-  const currentPlayer = players.find(p => p.id === playerId);
-  const score = currentPlayer?.score || 0;
-  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
+  // Remove these lines since we moved them above
+  // const currentPlayer = players.find(p => p.id === playerId);
+  // const score = currentPlayer?.score || 0;
+  // const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
 
   // Memoized lerp function for smoother camera transitions
   const lerp = useCallback((start: number, end: number, t: number) => 
