@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type CreateRoomProps = {
@@ -23,6 +23,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previousRoomId, setPreviousRoomId] = useState<string | null>(null);
+  const [timeoutId, setTimeoutId] = useState<number | null>(null);
 
   // If room creation was successful, this effect will detect it
   useEffect(() => {
@@ -34,9 +35,24 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
         console.log('CreateRoom: New room detected, previousId:', previousRoomId, 'newId:', currentRoom.id);
         setPreviousRoomId(currentRoom.id);
         setIsSubmitting(false);
+        
+        // Clear any pending timeout
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          setTimeoutId(null);
+        }
       }
     }
-  }, [currentRoom, previousRoomId]);
+  }, [currentRoom, previousRoomId, timeoutId]);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [timeoutId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,14 +71,15 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
     try {
       onCreateRoom(roomName.trim(), isPublic, maxPlayers);
       
-      // Set a timeout to reset the submitting state if no response after 5 seconds
-      setTimeout(() => {
-        if (isSubmitting) {
-          console.log('Room creation timed out');
-          setIsSubmitting(false);
-          toast.error('Room creation timed out. Please try again.');
-        }
-      }, 5000);
+      // Set a timeout to reset the submitting state if no response after 10 seconds
+      const id = window.setTimeout(() => {
+        console.log('Room creation timed out');
+        setIsSubmitting(false);
+        toast.error('Room creation timed out. The server might be unavailable.');
+        setTimeoutId(null);
+      }, 10000);
+      
+      setTimeoutId(id);
     } catch (error) {
       console.error('Error in CreateRoom handleSubmit:', error);
       toast.error('Failed to create room. Please try again.');
@@ -129,8 +146,19 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
           className="w-full bg-green-600 hover:bg-green-700"
           disabled={isSubmitting}
         >
-          {isSubmitting ? 'Creating...' : 'Create Room'}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Creating...
+            </>
+          ) : 'Create Room'}
         </Button>
+
+        {isSubmitting && (
+          <p className="text-white/60 text-sm text-center animate-pulse">
+            Waiting for server response...
+          </p>
+        )}
       </form>
     </div>
   );

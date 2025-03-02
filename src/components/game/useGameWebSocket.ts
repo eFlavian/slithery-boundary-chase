@@ -53,6 +53,8 @@ export const useGameWebSocket = () => {
   const minimapBlinkRef = useRef<number>();
   const reconnectTimerRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
+  const lastSocketMessageRef = useRef<number>(Date.now());
+  const pendingRoomCreationRef = useRef<boolean>(false);
 
   const connectToServer = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -71,10 +73,24 @@ export const useGameWebSocket = () => {
       console.log('Connected to server');
       toast.success('Connected to game server');
       setReconnectAttempts(0);
+      lastSocketMessageRef.current = Date.now();
+      
+      if (pendingRoomCreationRef.current && playerId) {
+        console.log('Reconnected with pending room creation, sending ping...');
+        try {
+          ws.send(JSON.stringify({
+            type: 'ping',
+            playerId
+          }));
+        } catch (error) {
+          console.error('Error sending ping after reconnect:', error);
+        }
+      }
     };
 
     ws.onmessage = (event) => {
       try {
+        lastSocketMessageRef.current = Date.now();
         const message = JSON.parse(event.data);
         console.log('Received message:', message);
 
@@ -176,6 +192,7 @@ export const useGameWebSocket = () => {
 
           case 'roomCreated':
             console.log('Room created response received:', message.data);
+            pendingRoomCreationRef.current = false;
             
             if (!message.data.roomId) {
               console.error('Invalid room data received:', message.data);
@@ -233,6 +250,7 @@ export const useGameWebSocket = () => {
             break;
 
           case 'roomError':
+            pendingRoomCreationRef.current = false;
             toast.error(message.data.message);
             break;
 
@@ -242,6 +260,10 @@ export const useGameWebSocket = () => {
               setIsPlaying(true);
               setGameOver(false);
             }, 3000);
+            break;
+            
+          case 'pong':
+            console.log('Received pong from server');
             break;
             
           default:
@@ -277,6 +299,36 @@ export const useGameWebSocket = () => {
     };
 
     wsRef.current = ws;
+    
+    const healthCheckInterval = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastMessage = now - lastSocketMessageRef.current;
+      
+      if (timeSinceLastMessage > 30000 && !isPlaying && wsRef.current) {
+        console.log(`No message received for ${timeSinceLastMessage/1000} seconds, sending ping`);
+        
+        try {
+          if (wsRef.current.readyState === WebSocket.OPEN && playerId) {
+            wsRef.current.send(JSON.stringify({
+              type: 'ping',
+              playerId
+            }));
+          }
+        } catch (error) {
+          console.error('Error sending ping:', error);
+        }
+      }
+      
+      if (pendingRoomCreationRef.current && timeSinceLastMessage > 60000) {
+        console.log('Room creation appears to have failed after 60 seconds');
+        pendingRoomCreationRef.current = false;
+        toast.error('Room creation timed out. The server might be unavailable.');
+      }
+    }, 10000);
+    
+    return () => {
+      clearInterval(healthCheckInterval);
+    };
   };
 
   const sendDirection = (direction: Direction) => {
@@ -345,6 +397,16 @@ export const useGameWebSocket = () => {
     try {
       wsRef.current.send(JSON.stringify(request));
       console.log('Create room request sent successfully');
+      pendingRoomCreationRef.current = true;
+      
+      setTimeout(() => {
+        if (pendingRoomCreationRef.current) {
+          pendingRoomCreationRef.current = false;
+          console.log('Room creation timed out after 30 seconds');
+          toast.error('Room creation request timed out. The server might be unavailable.');
+        }
+      }, 30000);
+      
       return true;
     } catch (error) {
       console.error('Error sending createRoom request:', error);
@@ -412,9 +474,10 @@ export const useGameWebSocket = () => {
   };
 
   useEffect(() => {
-    connectToServer();
+    const cleanupFn = connectToServer();
     
     return () => {
+      cleanupFn();
       wsRef.current?.close();
       if (minimapTimerRef.current) {
         clearTimeout(minimapTimerRef.current);
