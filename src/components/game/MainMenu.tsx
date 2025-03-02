@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Play } from 'lucide-react';
 import RoomsList from './RoomsList';
@@ -58,7 +59,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
   onStartGame,
 }) => {
   const [view, setView] = useState<'main' | 'rooms' | 'create'>('main');
-  const [roomCodeInput, setRoomCodeInput] = useState('');
   const [lastViewChangeTime, setLastViewChangeTime] = useState(Date.now());
 
   useEffect(() => {
@@ -123,21 +123,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
     }
   };
 
-  const handleJoinWithCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!playerName.trim()) {
-      toast.error("Please enter your name before joining a room");
-      return;
-    }
-    
-    if (roomCodeInput.trim()) {
-      console.log('MainMenu: Joining room with code:', roomCodeInput.trim());
-      onJoinRoom(roomCodeInput.trim());
-    } else {
-      toast.error("Please enter a room code");
-    }
-  };
-
   if (currentRoom) {
     console.log('MainMenu: Showing room lobby for room:', currentRoom.id);
     return (
@@ -190,26 +175,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
                 >
                   Multiplayer Rooms
                 </button>
-                
-                <form onSubmit={handleJoinWithCode} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={roomCodeInput}
-                    onChange={(e) => {
-                      setRoomCodeInput(e.target.value.toUpperCase());
-                    }}
-                    className="flex-1 px-4 py-2 bg-gray-900/60 border border-white/20 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono tracking-wider"
-                    placeholder="Room Code"
-                    maxLength={10}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!roomCodeInput.trim() || !playerName.trim()}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Join
-                  </button>
-                </form>
                 
                 <div className="relative flex items-center py-2">
                   <div className="flex-grow border-t border-white/20"></div>
