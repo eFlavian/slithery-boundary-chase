@@ -8,7 +8,6 @@ import Minimap from './game/Minimap';
 import PlayerScore from './game/PlayerScore';
 import Leaderboard from './game/Leaderboard';
 import SpeedBoost from './game/SpeedBoost';
-import StartScreen from './game/StartScreen';
 import GameCanvas from './game/GameCanvas';
 import useGameWebSocket from './game/useGameWebSocket';
 
@@ -42,14 +41,14 @@ const GameBoard: React.FC = () => {
     sendDirection,
     sendUpdate,
     sendSpeedBoost,
-    startGame,
     setGameOver,
-    setIsPlaying
+    setIsPlaying,
+    currentSession,
+    leaveSession
   } = useGameWebSocket();
 
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
-  const [playerName, setPlayerName] = useState('');
   
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
@@ -57,14 +56,9 @@ const GameBoard: React.FC = () => {
   const lastUpdateTime = useRef(0);
   const animationFrameRef = useRef<number>();
 
-  const handleStartGame = () => {
-    if (!playerName.trim()) {
-      toast.error("Please enter a name first!");
-      return;
-    }
-
-    startGame(playerName.trim());
-  };
+  const currentPlayer = players.find(p => p.id === playerId);
+  const score = currentPlayer?.score || 0;
+  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
 
   const handleDirection = (newDirection: Direction) => {
     const oppositeDirections = {
@@ -129,6 +123,15 @@ const GameBoard: React.FC = () => {
           setIsSpeedBoostActive(true);
         }
         break;
+      case 'escape':
+        event.preventDefault();
+        // Handle exit game
+        if (isPlaying && currentSession) {
+          leaveSession();
+          setIsPlaying(false);
+          toast.info("Left the game session");
+        }
+        break;
     }
   };
 
@@ -155,10 +158,6 @@ const GameBoard: React.FC = () => {
       return () => clearInterval(gameLoop.current);
     }
   }, [gameOver, direction, isSpeedBoostActive, playerId, isPlaying]);
-
-  const currentPlayer = players.find(p => p.id === playerId);
-  const score = currentPlayer?.score || 0;
-  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
 
   const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
 
@@ -228,14 +227,6 @@ const GameBoard: React.FC = () => {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <ThemeToggle />
 
-      {!isPlaying && !gameOver && (
-        <StartScreen 
-          playerName={playerName}
-          setPlayerName={setPlayerName}
-          handleStartGame={handleStartGame}
-        />
-      )}
-
       <Minimap 
         isMinimapVisible={isMinimapVisible}
         minimapTimeLeft={minimapTimeLeft}
@@ -272,7 +263,32 @@ const GameBoard: React.FC = () => {
         setIsSpeedBoostActive={setIsSpeedBoostActive}
       />
 
-      {gameOver && <GameOver score={score} />}
+      {gameOver && (
+        <GameOver 
+          score={score} 
+          onExit={() => {
+            if (currentSession) {
+              leaveSession();
+            }
+            setGameOver(false);
+          }} 
+        />
+      )}
+      
+      {/* Exit game button */}
+      {isPlaying && (
+        <button 
+          onClick={() => {
+            if (currentSession) {
+              leaveSession();
+            }
+            setIsPlaying(false);
+          }}
+          className="fixed top-4 right-4 z-50 bg-red-500/80 hover:bg-red-600 text-white px-3 py-1 rounded-md text-sm"
+        >
+          Exit Game
+        </button>
+      )}
     </div>
   );
 };

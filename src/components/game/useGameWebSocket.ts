@@ -9,6 +9,22 @@ type Position = {
 };
 type FoodType = 'normal' | 'special';
 type FoodItem = Position & { type: FoodType };
+type SessionStatus = 'waiting' | 'playing' | 'ended';
+type SessionVisibility = 'public' | 'private';
+
+export type Session = {
+  id: string;
+  code: string;
+  name: string;
+  hostId: string;
+  players: Array<{
+    id: string;
+    name: string;
+    isReady: boolean;
+  }>;
+  status: SessionStatus;
+  visibility: SessionVisibility;
+};
 
 export const useGameWebSocket = () => {
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -21,6 +37,13 @@ export const useGameWebSocket = () => {
   const [isMinimapVisible, setIsMinimapVisible] = useState(false);
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  
+  // Session state
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [currentSession, setCurrentSession] = useState<Session | null>(null);
+  const [isHost, setIsHost] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [joinCode, setJoinCode] = useState<string>('');
   
   const wsRef = useRef<WebSocket | null>(null);
   const minimapTimerRef = useRef<number>();
@@ -144,6 +167,57 @@ export const useGameWebSocket = () => {
             }
           }, message.data.duration * 1000);
           break;
+          
+        // Session-related messages
+        case 'sessionsList':
+          setSessions(message.data.sessions);
+          break;
+          
+        case 'sessionCreated':
+          setCurrentSession(message.data.session);
+          setIsHost(true);
+          setJoinCode(message.data.session.code);
+          toast.success(`Session created with code: ${message.data.session.code}`);
+          break;
+          
+        case 'sessionJoined':
+          setCurrentSession(message.data.session);
+          setIsHost(message.data.session.hostId === playerId);
+          toast.success(`Joined session: ${message.data.session.name}`);
+          break;
+          
+        case 'sessionUpdated':
+          setCurrentSession(message.data.session);
+          
+          // Check if all players are ready and the game should start
+          if (message.data.session.status === 'playing' && !isPlaying) {
+            setIsPlaying(true);
+            setGameOver(false);
+            toast.success('All players ready! Game starting...');
+          }
+          break;
+          
+        case 'playerReadyChanged':
+          if (message.data.playerId === playerId) {
+            setIsReady(message.data.isReady);
+          }
+          // The full session state will come in sessionUpdated
+          break;
+          
+        case 'sessionError':
+          toast.error(message.data.message);
+          break;
+          
+        case 'sessionClosed':
+          setCurrentSession(null);
+          setIsHost(false);
+          setIsReady(false);
+          if (isPlaying) {
+            setGameOver(true);
+            setIsPlaying(false);
+          }
+          toast.error('Session closed');
+          break;
       }
     };
 
@@ -202,6 +276,79 @@ export const useGameWebSocket = () => {
     }));
   };
 
+  // Session-related methods
+  const createSession = (sessionName: string, visibility: SessionVisibility = 'private') => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'createSession',
+      sessionName,
+      playerId,
+      visibility
+    }));
+  };
+  
+  const joinSession = (code: string) => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'joinSession',
+      code,
+      playerId
+    }));
+  };
+  
+  const leaveSession = () => {
+    if (!wsRef.current || !playerId || !currentSession) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'leaveSession',
+      sessionId: currentSession.id,
+      playerId
+    }));
+    
+    setCurrentSession(null);
+    setIsHost(false);
+    setIsReady(false);
+  };
+  
+  const toggleReady = () => {
+    if (!wsRef.current || !playerId || !currentSession) return;
+    
+    const newReadyState = !isReady;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'toggleReady',
+      sessionId: currentSession.id,
+      playerId,
+      isReady: newReadyState
+    }));
+    
+    setIsReady(newReadyState);
+  };
+  
+  const toggleSessionVisibility = () => {
+    if (!wsRef.current || !playerId || !currentSession || !isHost) return;
+    
+    const newVisibility = currentSession.visibility === 'public' ? 'private' : 'public';
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'toggleVisibility',
+      sessionId: currentSession.id,
+      playerId,
+      visibility: newVisibility
+    }));
+  };
+  
+  const fetchSessions = () => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'getSessions',
+      playerId
+    }));
+  };
+
   const startGame = (playerName: string) => {
     if (!wsRef.current || !playerId) return;
     
@@ -249,7 +396,19 @@ export const useGameWebSocket = () => {
     sendSpeedBoost,
     startGame,
     setGameOver,
-    setIsPlaying
+    setIsPlaying,
+    // Session-related properties and methods
+    sessions,
+    currentSession,
+    isHost,
+    isReady,
+    joinCode,
+    createSession,
+    joinSession,
+    leaveSession,
+    toggleReady,
+    toggleSessionVisibility,
+    fetchSessions
   };
 };
 
