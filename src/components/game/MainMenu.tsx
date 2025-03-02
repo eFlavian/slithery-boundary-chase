@@ -72,6 +72,14 @@ const MainMenu: React.FC<MainMenuProps> = ({
     }
   }, [playerName, onJoinRoom]);
 
+  // Handle room creation
+  const handleCreateRoom = (roomName: string, isPublic: boolean, maxPlayers: number) => {
+    console.log('MainMenu handling room creation:', roomName, isPublic, maxPlayers);
+    if (playerName.trim()) {
+      onCreateRoom(roomName, isPublic, maxPlayers);
+    }
+  };
+
   const handleJoinWithCode = (e: React.FormEvent) => {
     e.preventDefault();
     if (roomCodeInput.trim()) {
@@ -180,7 +188,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
         
         {view === 'create' && (
           <CreateRoom
-            onCreateRoom={onCreateRoom}
+            onCreateRoom={handleCreateRoom}
             onBack={() => setView('rooms')}
           />
         )}

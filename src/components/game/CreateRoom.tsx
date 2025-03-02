@@ -18,6 +18,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (roomName.trim()) {
+      console.log('Creating room:', roomName, isPublic, maxPlayers);
       onCreateRoom(roomName.trim(), isPublic, maxPlayers);
     }
   };
