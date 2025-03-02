@@ -1,4 +1,3 @@
-
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -15,9 +14,6 @@ const gameState = {
   playerCount: 0
 };
 
-const rooms = new Map();
-const playerRooms = new Map();
-
 const GRID_SIZE = 256;
 const INITIAL_NORMAL_FOOD = 100;
 const INITIAL_SPECIAL_FOOD = 30;
@@ -26,7 +22,7 @@ const INITIAL_YELLOW_DOTS = 5;
 const FOOD_SPAWN_INTERVAL = 5000;
 const PORTAL_SPAWN_INTERVAL = 20000;
 const YELLOW_DOT_SPAWN_INTERVAL = 60000;
-const MINIMAP_DURATION = 20;
+const MINIMAP_DURATION = 20; // Changed from 10 to 20 seconds
 
 function getRandomPosition() {
   return {
@@ -127,54 +123,6 @@ function handleCollision(playerId, newHead) {
   return { collision: false };
 }
 
-function broadcastPublicRooms() {
-  const publicRoomsArray = Array.from(rooms.values())
-    .filter(room => room.isPublic)
-    .map(room => ({
-      id: room.id,
-      name: room.name,
-      playerCount: room.players.length,
-      maxPlayers: room.maxPlayers,
-      isPublic: room.isPublic,
-      host: room.host.name
-    }));
-
-  const roomsMsg = JSON.stringify({
-    type: 'publicRooms',
-    data: { rooms: publicRoomsArray }
-  });
-
-  wss.clients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(roomsMsg);
-    }
-  });
-}
-
-function broadcastRoomUpdate(roomId) {
-  const roomToUpdate = rooms.get(roomId);
-  if (!roomToUpdate) return;
-  
-  const allPlayersReady = roomToUpdate.players.length > 1 && 
-    roomToUpdate.players.every(player => player.isReady || player.isHost);
-  
-  const updateMsg = JSON.stringify({
-    type: 'roomUpdate',
-    data: {
-      roomId: roomToUpdate.id,
-      players: roomToUpdate.players,
-      allPlayersReady
-    }
-  });
-  
-  roomToUpdate.players.forEach(player => {
-    const playerData = gameState.players.get(player.id);
-    if (playerData && playerData.ws && playerData.ws.readyState === 1) {
-      playerData.ws.send(updateMsg);
-    }
-  });
-}
-
 function initializeGame() {
   for (let i = 0; i < INITIAL_NORMAL_FOOD; i++) {
     spawnFood();
@@ -194,19 +142,17 @@ function initializeGame() {
 }
 
 function broadcastGameState() {
-  const playersArray = Array.from(gameState.players.values())
-    .filter(player => player.isPlaying)
-    .map(player => ({
-      id: player.id,
-      name: player.name,
-      snake: player.snake,
-      direction: player.direction,
-      score: player.score,
-      speedBoostPercentage: player.speedBoostPercentage,
-      isPlaying: player.isPlaying,
-      minimapVisible: player.minimapVisible,
-      minimapTimer: player.minimapTimer
-    }));
+  const playersArray = Array.from(gameState.players.values()).map(player => ({
+    id: player.id,
+    name: player.name,
+    snake: player.snake,
+    direction: player.direction,
+    score: player.score,
+    speedBoostPercentage: player.speedBoostPercentage,
+    isPlaying: player.isPlaying,
+    minimapVisible: player.minimapVisible,
+    minimapTimer: player.minimapTimer
+  }));
 
   const state = {
     players: playersArray,
@@ -227,10 +173,6 @@ function broadcastGameState() {
   });
 }
 
-function createUniqueRoomId() {
-  return 'room_' + Math.random().toString(36).substring(2, 9);
-}
-
 wss.on('connection', (ws) => {
   const playerId = `player${++gameState.playerCount}`;
   
@@ -246,8 +188,7 @@ wss.on('connection', (ws) => {
     isPlaying: false,
     minimapVisible: false,
     minimapTimer: null,
-    minimapTimeLeft: 0,
-    ws: ws
+    minimapTimeLeft: 0 // Track time left on minimap
   });
 
   ws.send(JSON.stringify({
@@ -256,419 +197,143 @@ wss.on('connection', (ws) => {
   }));
 
   broadcastGameState();
-  
-  setTimeout(() => {
-    broadcastPublicRooms();
-  }, 1000);
 
   ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message);
-      const player = gameState.players.get(data.playerId);
+    const data = JSON.parse(message);
+    const player = gameState.players.get(data.playerId);
 
-      if (!player) return;
+    if (!player) return;
 
-      switch (data.type) {
-        case 'ping':
-          ws.send(JSON.stringify({
-            type: 'pong',
-            data: { timestamp: Date.now() }
-          }));
-          break;
+    switch (data.type) {
+      case 'spawn':
+        player.name = data.playerName;
+        player.isPlaying = true;
+        const newSpawnPos = getRandomUnoccupiedPosition();
+        player.snake = [newSpawnPos];
+        broadcastGameState();
+        break;
 
-        case 'createRoom':
-          console.log(`Player ${data.playerId} creating room: ${data.roomName}`);
-          
-          const roomId = createUniqueRoomId();
-          const newRoom = {
-            id: roomId,
-            name: data.roomName,
-            isPublic: data.isPublic,
-            maxPlayers: data.maxPlayers || 8,
-            host: player,
-            players: [{
-              id: player.id,
-              name: player.name,
-              isReady: false,
-              isHost: true
-            }],
-            isGameStarted: false
-          };
-          
-          rooms.set(roomId, newRoom);
-          playerRooms.set(player.id, roomId);
-          
-          ws.send(JSON.stringify({
-            type: 'roomCreated',
-            data: {
-              roomId: roomId,
-              roomName: data.roomName,
-              isPublic: data.isPublic,
-              players: newRoom.players
-            }
-          }));
-          
-          console.log(`Room created: ${roomId} - ${data.roomName}`);
-          
-          if (data.isPublic) {
-            broadcastPublicRooms();
-          }
-          break;
+      case 'direction':
+        if (player.isPlaying) {
+          player.direction = data.direction;
+        }
+        break;
 
-        case 'joinRoom':
-          const roomToJoin = rooms.get(data.roomId);
-          if (!roomToJoin) {
-            ws.send(JSON.stringify({
-              type: 'roomError',
-              data: { message: 'Room not found' }
-            }));
-            return;
-          }
-          
-          if (roomToJoin.players.length >= roomToJoin.maxPlayers) {
-            ws.send(JSON.stringify({
-              type: 'roomError',
-              data: { message: 'Room is full' }
-            }));
-            return;
-          }
-          
-          if (roomToJoin.isGameStarted) {
-            ws.send(JSON.stringify({
-              type: 'roomError',
-              data: { message: 'Game already started' }
-            }));
-            return;
-          }
-          
-          const playerInfo = {
-            id: player.id,
-            name: player.name,
-            isReady: false,
-            isHost: false
-          };
-          
-          roomToJoin.players.push(playerInfo);
-          playerRooms.set(player.id, data.roomId);
-          
-          ws.send(JSON.stringify({
-            type: 'roomJoined',
-            data: {
-              roomId: data.roomId,
-              roomName: roomToJoin.name,
-              isPublic: roomToJoin.isPublic,
-              isHost: false,
-              players: roomToJoin.players
-            }
-          }));
-          
-          roomToJoin.players.forEach(p => {
-            if (p.id !== player.id) {
-              const playerSocket = gameState.players.get(p.id)?.ws;
-              if (playerSocket && playerSocket.readyState === 1) {
-                playerSocket.send(JSON.stringify({
-                  type: 'playerJoined',
-                  data: {
-                    roomId: data.roomId,
-                    playerId: player.id,
-                    playerName: player.name
-                  }
-                }));
-              }
-            }
-          });
-          
-          broadcastRoomUpdate(data.roomId);
-          
-          if (roomToJoin.isPublic) {
-            broadcastPublicRooms();
-          }
-          break;
+      case 'update':
+        if (!player.isPlaying) return;
 
-        case 'leaveRoom':
-          const playerRoomId = playerRooms.get(player.id);
-          if (!playerRoomId) return;
+        const newHead = { ...player.snake[0] };
+        
+        switch (player.direction) {
+          case 'UP': newHead.y -= 1; break;
+          case 'DOWN': newHead.y += 1; break;
+          case 'LEFT': newHead.x -= 1; break;
+          case 'RIGHT': newHead.x += 1; break;
+        }
+
+        const collisionResult = handleCollision(data.playerId, newHead);
+        
+        if (collisionResult.collision) {
+          player.isPlaying = false;
           
-          const currentRoom = rooms.get(playerRoomId);
-          if (!currentRoom) return;
-          
-          const playerIndex = currentRoom.players.findIndex(p => p.id === player.id);
-          if (playerIndex !== -1) {
-            currentRoom.players.splice(playerIndex, 1);
+          if (player.minimapTimer) {
+            clearTimeout(player.minimapTimer);
+            player.minimapTimer = null;
+            player.minimapVisible = false;
           }
           
-          playerRooms.delete(player.id);
-          
-          ws.send(JSON.stringify({
-            type: 'roomLeft',
-            data: { roomId: playerRoomId }
-          }));
-          
-          if (currentRoom.players.length === 0) {
-            rooms.delete(playerRoomId);
-          } else if (player.id === currentRoom.host.id) {
-            currentRoom.host = gameState.players.get(currentRoom.players[0].id);
-            currentRoom.players[0].isHost = true;
-            
-            const newHostSocket = gameState.players.get(currentRoom.players[0].id)?.ws;
-            if (newHostSocket && newHostSocket.readyState === 1) {
-              newHostSocket.send(JSON.stringify({
-                type: 'hostTransferred',
-                data: { roomId: playerRoomId }
-              }));
-            }
-          }
-          
-          currentRoom.players.forEach(p => {
-            const playerSocket = gameState.players.get(p.id)?.ws;
-            if (playerSocket && playerSocket.readyState === 1) {
-              playerSocket.send(JSON.stringify({
-                type: 'playerLeft',
-                data: {
-                  roomId: playerRoomId,
-                  playerId: player.id,
-                  playerName: player.name
+          wss.clients.forEach(client => {
+            if (client.readyState === 1) {
+              client.send(JSON.stringify({
+                type: 'playerDeath',
+                data: { 
+                  message: collisionResult.message,
+                  playerId: data.playerId
                 }
               }));
             }
           });
-          
-          if (currentRoom.players.length > 0) {
-            broadcastRoomUpdate(playerRoomId);
-          }
-          
-          if (currentRoom.isPublic) {
-            broadcastPublicRooms();
-          }
-          break;
 
-        case 'toggleReady':
-          const readyRoomId = data.roomId;
-          const readyRoom = rooms.get(readyRoomId);
-          if (!readyRoom) return;
-          
-          const playerInRoom = readyRoom.players.find(p => p.id === player.id);
-          if (!playerInRoom) return;
-          
-          playerInRoom.isReady = data.isReady;
-          
-          broadcastRoomUpdate(readyRoomId);
-          break;
-
-        case 'startGame':
-          const gameRoomId = data.roomId;
-          const gameRoom = rooms.get(gameRoomId);
-          
-          if (!gameRoom || player.id !== gameRoom.host.id) return;
-          
-          const allReady = gameRoom.players.length > 1 && 
-            gameRoom.players.every(p => p.isReady || p.isHost);
-          
-          if (!allReady) return;
-          
-          gameRoom.isGameStarted = true;
-          
-          gameRoom.players.forEach(p => {
-            const playerSocket = gameState.players.get(p.id)?.ws;
-            if (playerSocket && playerSocket.readyState === 1) {
-              playerSocket.send(JSON.stringify({
-                type: 'gameStarting',
-                data: { roomId: gameRoomId }
-              }));
+          ws.send(JSON.stringify({
+            type: 'gameOver',
+            data: { 
+              score: player.score,
+              message: collisionResult.message
             }
-          });
+          }));
+          return;
+        }
+
+        const newSnake = [newHead, ...player.snake];
+
+        const portalIndex = gameState.portals.findIndex(portal => 
+          portal.x === newHead.x && portal.y === newHead.y
+        );
+
+        if (portalIndex !== -1) {
+          gameState.portals.splice(portalIndex, 1);
+          player.speedBoostPercentage = Math.min(
+            player.speedBoostPercentage + 25, 
+            100
+          );
+        }
+
+        const yellowDotIndex = gameState.yellowDots.findIndex(dot => 
+          dot.x === newHead.x && dot.y === newHead.y
+        );
+
+        if (yellowDotIndex !== -1) {
+          // Remove the yellow dot
+          gameState.yellowDots.splice(yellowDotIndex, 1);
           
-          if (gameRoom.isPublic) {
-            broadcastPublicRooms();
-          }
-          break;
-
-        case 'getPublicRooms':
-          broadcastPublicRooms();
-          break;
-
-        case 'spawn':
-          player.name = data.playerName;
-          player.isPlaying = true;
-          const newSpawnPos = getRandomUnoccupiedPosition();
-          player.snake = [newSpawnPos];
-          broadcastGameState();
-          break;
-
-        case 'direction':
-          if (player.isPlaying) {
-            player.direction = data.direction;
-          }
-          break;
-
-        case 'update':
-          if (!player.isPlaying) return;
-
-          const newHead = { ...player.snake[0] };
-          
-          switch (player.direction) {
-            case 'UP': newHead.y -= 1; break;
-            case 'DOWN': newHead.y += 1; break;
-            case 'LEFT': newHead.x -= 1; break;
-            case 'RIGHT': newHead.x += 1; break;
-          }
-
-          const collisionResult = handleCollision(data.playerId, newHead);
-          
-          if (collisionResult.collision) {
-            player.isPlaying = false;
-            
-            if (player.minimapTimer) {
-              clearTimeout(player.minimapTimer);
-              player.minimapTimer = null;
-              player.minimapVisible = false;
+          // Always send a fixed duration of 20 seconds (MINIMAP_DURATION)
+          // Don't add to existing duration
+          ws.send(JSON.stringify({
+            type: 'minimapUpdate',
+            data: { 
+              visible: true,
+              duration: MINIMAP_DURATION,
+              reset: true // Flag to indicate we should reset any existing timer
             }
-            
-            wss.clients.forEach(client => {
-              if (client.readyState === 1) {
-                client.send(JSON.stringify({
-                  type: 'playerDeath',
-                  data: { 
-                    message: collisionResult.message,
-                    playerId: data.playerId
-                  }
-                }));
-              }
-            });
+          }));
+        }
 
-            ws.send(JSON.stringify({
-              type: 'gameOver',
-              data: { 
-                score: player.score,
-                message: collisionResult.message
-              }
-            }));
-            return;
-          }
+        const foodIndex = gameState.foods.findIndex(food => 
+          food.x === newHead.x && food.y === newHead.y
+        );
 
-          const newSnake = [newHead, ...player.snake];
-
-          const portalIndex = gameState.portals.findIndex(portal => 
-            portal.x === newHead.x && portal.y === newHead.y
-          );
-
-          if (portalIndex !== -1) {
-            gameState.portals.splice(portalIndex, 1);
-            player.speedBoostPercentage = Math.min(
-              player.speedBoostPercentage + 25, 
-              100
-            );
-          }
-
-          const yellowDotIndex = gameState.yellowDots.findIndex(dot => 
-            dot.x === newHead.x && dot.y === newHead.y
-          );
-
-          if (yellowDotIndex !== -1) {
-            gameState.yellowDots.splice(yellowDotIndex, 1);
-            
-            ws.send(JSON.stringify({
-              type: 'minimapUpdate',
-              data: { 
-                visible: true,
-                duration: MINIMAP_DURATION,
-                reset: true
-              }
-            }));
-          }
-
-          const foodIndex = gameState.foods.findIndex(food => 
-            food.x === newHead.x && food.y === newHead.y
-          );
-
-          if (foodIndex !== -1) {
-            const food = gameState.foods[foodIndex];
-            gameState.foods.splice(foodIndex, 1);
-            player.score += food.type === 'special' ? 5 : 1;
-            
-            if (food.type === 'special') {
-              for (let i = 0; i < 4; i++) {
-                newSnake.push({ ...newSnake[newSnake.length - 1] });
-              }
+        if (foodIndex !== -1) {
+          const food = gameState.foods[foodIndex];
+          gameState.foods.splice(foodIndex, 1);
+          player.score += food.type === 'special' ? 5 : 1;
+          
+          if (food.type === 'special') {
+            for (let i = 0; i < 4; i++) {
+              newSnake.push({ ...newSnake[newSnake.length - 1] });
             }
-          } else {
-            newSnake.pop();
           }
+        } else {
+          newSnake.pop();
+        }
 
-          player.snake = newSnake;
-          break;
+        player.snake = newSnake;
+        break;
 
-        case 'speedBoost':
-          if (player.isPlaying) {
-            player.speedBoostPercentage = Math.max(0, player.speedBoostPercentage - 0.5);
-          }
-          break;
-      }
-
-      broadcastGameState();
-    } catch (error) {
-      console.error('Error processing message:', error);
+      case 'speedBoost':
+        if (player.isPlaying) {
+          player.speedBoostPercentage = Math.max(0, player.speedBoostPercentage - 0.5);
+        }
+        break;
     }
+
+    broadcastGameState();
   });
 
   ws.on('close', () => {
     const player = gameState.players.get(playerId);
-    if (!player) return;
-    
-    if (player.minimapTimer) {
+    if (player && player.minimapTimer) {
       clearTimeout(player.minimapTimer);
     }
-    
-    const roomId = playerRooms.get(playerId);
-    if (roomId) {
-      const roomToLeave = rooms.get(roomId);
-      if (roomToLeave) {
-        const playerIndex = roomToLeave.players.findIndex(p => p.id === playerId);
-        if (playerIndex !== -1) {
-          roomToLeave.players.splice(playerIndex, 1);
-        }
-        
-        if (roomToLeave.players.length === 0) {
-          rooms.delete(roomId);
-        } else if (player.id === roomToLeave.host.id) {
-          roomToLeave.host = gameState.players.get(roomToLeave.players[0].id);
-          roomToLeave.players[0].isHost = true;
-          
-          const newHostSocket = gameState.players.get(roomToLeave.players[0].id)?.ws;
-          if (newHostSocket && newHostSocket.readyState === 1) {
-            newHostSocket.send(JSON.stringify({
-              type: 'hostTransferred',
-              data: { roomId }
-            }));
-          }
-        }
-        
-        roomToLeave.players.forEach(p => {
-          const playerSocket = gameState.players.get(p.id)?.ws;
-          if (playerSocket && playerSocket.readyState === 1) {
-            playerSocket.send(JSON.stringify({
-              type: 'playerLeft',
-              data: {
-                roomId,
-                playerId,
-                playerName: player.name
-              }
-            }));
-          }
-        });
-        
-        if (roomToLeave.players.length > 0) {
-          broadcastRoomUpdate(roomId);
-        }
-        
-        if (roomToLeave.isPublic) {
-          broadcastPublicRooms();
-        }
-      }
-      
-      playerRooms.delete(playerId);
-    }
-    
     gameState.players.delete(playerId);
     broadcastGameState();
   });

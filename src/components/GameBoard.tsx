@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import ThemeToggle from './game/ThemeToggle';
@@ -7,7 +8,7 @@ import Minimap from './game/Minimap';
 import PlayerScore from './game/PlayerScore';
 import Leaderboard from './game/Leaderboard';
 import SpeedBoost from './game/SpeedBoost';
-import MainMenu from './game/MainMenu';
+import StartScreen from './game/StartScreen';
 import GameCanvas from './game/GameCanvas';
 import useGameWebSocket from './game/useGameWebSocket';
 
@@ -30,8 +31,6 @@ const INACTIVE_PLAYER_OPACITY = 0.2;
 const GameBoard: React.FC = () => {
   const {
     playerId,
-    playerName, // Use the playerName from the hook
-    setPlayerName, // Use the setter from the hook
     players,
     foods,
     yellowDots,
@@ -45,23 +44,12 @@ const GameBoard: React.FC = () => {
     sendSpeedBoost,
     startGame,
     setGameOver,
-    setIsPlaying,
-    // Room-related
-    publicRooms,
-    currentRoom,
-    isHost,
-    isReady,
-    allPlayersReady,
-    createRoom,
-    joinRoom,
-    leaveRoom,
-    toggleReady,
-    startRoomGame,
-    requestRoomUpdate
+    setIsPlaying
   } = useGameWebSocket();
 
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
+  const [playerName, setPlayerName] = useState('');
   
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
@@ -241,21 +229,10 @@ const GameBoard: React.FC = () => {
       <ThemeToggle />
 
       {!isPlaying && !gameOver && (
-        <MainMenu 
+        <StartScreen 
           playerName={playerName}
           setPlayerName={setPlayerName}
           handleStartGame={handleStartGame}
-          publicRooms={publicRooms}
-          currentRoom={currentRoom}
-          isHost={isHost}
-          isReady={isReady}
-          allPlayersReady={allPlayersReady}
-          onCreateRoom={createRoom}
-          onJoinRoom={joinRoom}
-          onLeaveRoom={leaveRoom}
-          onToggleReady={toggleReady}
-          onStartGame={startRoomGame}
-          onRefreshRoom={requestRoomUpdate}
         />
       )}
 
@@ -301,3 +278,6 @@ const GameBoard: React.FC = () => {
 };
 
 export default GameBoard;
+
+
+// GOOD VERSION
