@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -135,6 +134,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
           <CreateRoom 
             onCreateRoom={handleCreateRoomSubmit}
             onBack={handleBackToMain}
+            currentRoom={currentRoom}
           />
         );
         
@@ -158,8 +158,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
     }
   };
 
-  // Replace the component only if StartScreen is no longer needed
-  // Can be a standalone component if Menu is the primary entry point
   return (
     <Card className="w-full max-w-md bg-black/60 border-gray-800">
       <CardContent className="p-6">
