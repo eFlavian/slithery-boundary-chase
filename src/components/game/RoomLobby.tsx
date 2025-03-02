@@ -102,7 +102,7 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
               )}
             </div>
             <Badge 
-              variant={player.isReady ? "success" : "outline"}
+              variant="outline"
               className={player.isReady ? "bg-green-600 text-white" : ""}
             >
               {player.isReady ? (
@@ -119,8 +119,7 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
       <div className="flex gap-3">
         <Button 
           onClick={onToggleReady}
-          className={isReady ? "bg-gray-600 hover:bg-gray-700" : "bg-green-600 hover:bg-green-700"}
-          className="flex-1"
+          className={isReady ? "bg-gray-600 hover:bg-gray-700" : "bg-green-600 hover:bg-green-700 flex-1"}
         >
           {isReady ? "Cancel Ready" : "Ready"}
         </Button>
