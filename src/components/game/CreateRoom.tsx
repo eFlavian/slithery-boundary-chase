@@ -22,14 +22,21 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previousRoomId, setPreviousRoomId] = useState<string | null>(null);
 
   // If room creation was successful, this effect will detect it
   useEffect(() => {
-    if (currentRoom && isSubmitting) {
-      console.log('Room creation successful, currentRoom updated:', currentRoom);
-      setIsSubmitting(false);
+    if (currentRoom) {
+      console.log('CreateRoom: Room detected:', currentRoom);
+      
+      // Check if the room is new (not one we've already detected)
+      if (previousRoomId !== currentRoom.id) {
+        console.log('CreateRoom: New room detected, previousId:', previousRoomId, 'newId:', currentRoom.id);
+        setPreviousRoomId(currentRoom.id);
+        setIsSubmitting(false);
+      }
     }
-  }, [currentRoom, isSubmitting]);
+  }, [currentRoom, previousRoomId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,9 +50,9 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
     if (isSubmitting) return;
     
     setIsSubmitting(true);
+    console.log('CreateRoom: Creating room:', roomName, isPublic, maxPlayers);
     
     try {
-      console.log('CreateRoom: Creating room:', roomName, isPublic, maxPlayers);
       onCreateRoom(roomName.trim(), isPublic, maxPlayers);
       
       // Set a timeout to reset the submitting state if no response after 5 seconds

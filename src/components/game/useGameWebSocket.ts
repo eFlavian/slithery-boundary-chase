@@ -187,7 +187,7 @@ export const useGameWebSocket = () => {
               id: message.data.roomId,
               name: message.data.roomName,
               isPublic: message.data.isPublic,
-              players: message.data.players
+              players: message.data.players || []
             };
             
             console.log('Setting currentRoom to:', newRoom);
@@ -242,6 +242,10 @@ export const useGameWebSocket = () => {
               setIsPlaying(true);
               setGameOver(false);
             }, 3000);
+            break;
+            
+          default:
+            console.log('Unhandled message type:', message.type);
             break;
         }
       } catch (error) {
@@ -319,13 +323,13 @@ export const useGameWebSocket = () => {
     if (!wsRef.current || !playerId) {
       console.error('Cannot create room: No WebSocket connection or player ID');
       toast.error('Cannot create room. Try refreshing the page.');
-      return;
+      return false;
     }
     
     if (wsRef.current.readyState !== WebSocket.OPEN) {
       console.error('WebSocket not open, current state:', wsRef.current.readyState);
       toast.error('Connection to server not ready. Please try again in a moment.');
-      return;
+      return false;
     }
     
     const request = {
@@ -341,9 +345,11 @@ export const useGameWebSocket = () => {
     try {
       wsRef.current.send(JSON.stringify(request));
       console.log('Create room request sent successfully');
+      return true;
     } catch (error) {
       console.error('Error sending createRoom request:', error);
       toast.error('Failed to create room. Please try again.');
+      return false;
     }
   };
 

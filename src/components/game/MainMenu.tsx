@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Play } from 'lucide-react';
 import RoomsList from './RoomsList';
@@ -59,6 +60,32 @@ const MainMenu: React.FC<MainMenuProps> = ({
 }) => {
   const [view, setView] = useState<'main' | 'rooms' | 'create'>('main');
   const [roomCodeInput, setRoomCodeInput] = useState('');
+  const [lastViewChangeTime, setLastViewChangeTime] = useState(Date.now());
+
+  // Force reset view to main when navigating to a room
+  useEffect(() => {
+    if (currentRoom) {
+      console.log('MainMenu: Current room detected, currentRoom:', currentRoom);
+      // Reset view back to main if we've just joined a room
+      const now = Date.now();
+      // Only reset if it's been more than 200ms since the last view change to prevent flashing
+      if (now - lastViewChangeTime > 200) {
+        console.log('MainMenu: Resetting view to main because current room detected');
+        setView('main');
+      }
+    }
+  }, [currentRoom, lastViewChangeTime]);
+
+  // For debugging - track room state changes
+  useEffect(() => {
+    console.log('MainMenu: Current room updated:', currentRoom);
+  }, [currentRoom]);
+
+  // For debugging - track view state changes
+  useEffect(() => {
+    console.log('MainMenu: View changed to:', view);
+    setLastViewChangeTime(Date.now());
+  }, [view]);
 
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
@@ -70,25 +97,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
     }
   }, [playerName, onJoinRoom]);
 
-  useEffect(() => {
-    if (currentRoom) {
-      console.log('MainMenu: Current room updated:', currentRoom);
-    }
-  }, [currentRoom]);
-
-  useEffect(() => {
-    if (!currentRoom && view !== 'main') {
-      console.log('MainMenu: No current room, resetting view to main');
-      setView('main');
-    }
-  }, [currentRoom]);
-
-  useEffect(() => {
-    if (currentRoom) {
-      console.log('MainMenu: Room active, showing room lobby UI');
-    }
-  }, [currentRoom]);
-
   const handleCreateRoom = (roomName: string, isPublic: boolean, maxPlayers: number) => {
     console.log('MainMenu handling room creation:', roomName, isPublic, maxPlayers);
     
@@ -98,6 +106,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
     }
 
     try {
+      console.log('MainMenu: Calling onCreateRoom');
       onCreateRoom(roomName, isPublic, maxPlayers);
       console.log('MainMenu: Room creation request sent');
     } catch (error) {
@@ -113,6 +122,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
     }
   };
 
+  // Render the room lobby when currentRoom is not null
   if (currentRoom) {
     console.log('MainMenu: Showing room lobby for room:', currentRoom.id);
     return (
