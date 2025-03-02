@@ -1,5 +1,5 @@
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
@@ -9,6 +9,17 @@ type Position = {
 };
 type FoodType = 'normal' | 'special';
 type FoodItem = Position & { type: FoodType };
+type GameMode = 'freeRide' | 'session';
+type Room = {
+  id: string;
+  name: string;
+  code: string;
+  isPrivate: boolean;
+  players: string[];
+  createdBy: string;
+  maxPlayers: number;
+  gameStarted: boolean;
+};
 
 export const useGameWebSocket = () => {
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -21,6 +32,11 @@ export const useGameWebSocket = () => {
   const [isMinimapVisible, setIsMinimapVisible] = useState(false);
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [gameMode, setGameMode] = useState<GameMode>('freeRide');
+  const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
+  const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [view, setView] = useState<'menu' | 'freeRide' | 'createRoom' | 'joinRoom' | 'room'>('menu');
   
   const wsRef = useRef<WebSocket | null>(null);
   const minimapTimerRef = useRef<number>();
@@ -144,6 +160,59 @@ export const useGameWebSocket = () => {
             }
           }, message.data.duration * 1000);
           break;
+
+        case 'roomsList':
+          setAvailableRooms(message.data.rooms);
+          break;
+
+        case 'roomCreated':
+          setCurrentRoom(message.data.room);
+          setView('room');
+          toast.success(`Room "${message.data.room.name}" created successfully!`);
+          break;
+
+        case 'roomJoined':
+          setCurrentRoom(message.data.room);
+          setView('room');
+          toast.success(`Joined room "${message.data.room.name}"`);
+          break;
+
+        case 'playerJoinedRoom':
+          if (currentRoom && message.data.roomId === currentRoom.id) {
+            setCurrentRoom(prev => prev ? {
+              ...prev,
+              players: message.data.players
+            } : null);
+            toast.info(`${message.data.playerName} joined the room`);
+          }
+          break;
+
+        case 'playerLeftRoom':
+          if (currentRoom && message.data.roomId === currentRoom.id) {
+            setCurrentRoom(prev => prev ? {
+              ...prev,
+              players: message.data.players
+            } : null);
+            toast(`${message.data.playerName} left the room`);
+          }
+          break;
+
+        case 'playerReady':
+          if (currentRoom && message.data.roomId === currentRoom.id) {
+            // Update player ready status in the room
+            toast.info(`${message.data.playerName} is ready!`);
+          }
+          break;
+
+        case 'gameStarting':
+          toast.success('All players are ready! Game starting...');
+          setIsPlaying(true);
+          setGameOver(false);
+          break;
+
+        case 'error':
+          toast.error(message.data.message);
+          break;
       }
     };
 
@@ -202,7 +271,7 @@ export const useGameWebSocket = () => {
     }));
   };
 
-  const startGame = (playerName: string) => {
+  const startFreeRide = (playerName: string) => {
     if (!wsRef.current || !playerId) return;
     
     wsRef.current.send(JSON.stringify({
@@ -211,8 +280,68 @@ export const useGameWebSocket = () => {
       playerId
     }));
     
+    setGameMode('freeRide');
     setIsPlaying(true);
+    setView('freeRide');
   };
+
+  const createRoom = (roomName: string, isPrivate: boolean, maxPlayers: number) => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'createRoom',
+      playerId,
+      roomName,
+      isPrivate,
+      maxPlayers
+    }));
+  };
+
+  const joinRoom = (roomId: string, code?: string) => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'joinRoom',
+      playerId,
+      roomId,
+      code
+    }));
+  };
+
+  const leaveRoom = () => {
+    if (!wsRef.current || !playerId || !currentRoom) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'leaveRoom',
+      playerId,
+      roomId: currentRoom.id
+    }));
+    
+    setCurrentRoom(null);
+    setIsReady(false);
+    setView('menu');
+  };
+
+  const setPlayerReady = () => {
+    if (!wsRef.current || !playerId || !currentRoom) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'playerReady',
+      playerId,
+      roomId: currentRoom.id
+    }));
+    
+    setIsReady(true);
+  };
+
+  const getRoomsList = useCallback(() => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'getRooms',
+      playerId
+    }));
+  }, [playerId]);
 
   useEffect(() => {
     connectToServer();
@@ -244,12 +373,23 @@ export const useGameWebSocket = () => {
     isPlaying,
     isMinimapVisible,
     minimapTimeLeft,
+    gameMode,
+    availableRooms,
+    currentRoom,
+    isReady,
+    view,
     sendDirection,
     sendUpdate,
     sendSpeedBoost,
-    startGame,
+    startFreeRide,
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    setPlayerReady,
+    getRoomsList,
     setGameOver,
-    setIsPlaying
+    setIsPlaying,
+    setView
   };
 };
 

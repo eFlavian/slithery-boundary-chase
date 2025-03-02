@@ -8,9 +8,13 @@ import Minimap from './game/Minimap';
 import PlayerScore from './game/PlayerScore';
 import Leaderboard from './game/Leaderboard';
 import SpeedBoost from './game/SpeedBoost';
-import StartScreen from './game/StartScreen';
 import GameCanvas from './game/GameCanvas';
+import MainMenu from './game/MainMenu';
+import CreateRoom from './game/CreateRoom';
+import JoinRoom from './game/JoinRoom';
+import RoomLobby from './game/RoomLobby';
 import useGameWebSocket from './game/useGameWebSocket';
+import { GRID_SIZE, CELL_SIZE, INITIAL_SPEED, CAMERA_SMOOTHING, MIN_SNAKE_OPACITY, MINIMAP_SIZE, INACTIVE_PLAYER_OPACITY } from './game/gameConstants';
 
 type Position = {
   x: number;
@@ -18,15 +22,6 @@ type Position = {
 };
 
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
-
-// Constants
-const GRID_SIZE = 256;
-const CELL_SIZE = 15;
-const INITIAL_SPEED = 140;
-const CAMERA_SMOOTHING = 0.55;
-const MIN_SNAKE_OPACITY = 0.3;
-const MINIMAP_SIZE = 150;
-const INACTIVE_PLAYER_OPACITY = 0.2;
 
 const GameBoard: React.FC = () => {
   const {
@@ -39,12 +34,22 @@ const GameBoard: React.FC = () => {
     isPlaying,
     isMinimapVisible,
     minimapTimeLeft,
+    availableRooms,
+    currentRoom,
+    isReady,
+    view,
     sendDirection,
     sendUpdate,
     sendSpeedBoost,
-    startGame,
+    startFreeRide,
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    setPlayerReady,
+    getRoomsList,
     setGameOver,
-    setIsPlaying
+    setIsPlaying,
+    setView
   } = useGameWebSocket();
 
   const [direction, setDirection] = useState<Direction>('RIGHT');
@@ -57,13 +62,29 @@ const GameBoard: React.FC = () => {
   const lastUpdateTime = useRef(0);
   const animationFrameRef = useRef<number>();
 
-  const handleStartGame = () => {
+  const handleStartFreeRide = () => {
     if (!playerName.trim()) {
       toast.error("Please enter a name first!");
       return;
     }
 
-    startGame(playerName.trim());
+    startFreeRide(playerName.trim());
+  };
+
+  const handleCreateRoom = (roomName: string, isPrivate: boolean, maxPlayers: number) => {
+    createRoom(roomName, isPrivate, maxPlayers);
+  };
+
+  const handleJoinRoom = (roomId: string, code?: string) => {
+    joinRoom(roomId, code);
+  };
+
+  const handleLeaveRoom = () => {
+    leaveRoom();
+  };
+
+  const handleSetReady = () => {
+    setPlayerReady();
   };
 
   const handleDirection = (newDirection: Direction) => {
@@ -224,17 +245,55 @@ const GameBoard: React.FC = () => {
     };
   }, [direction, currentPlayer?.speedBoostPercentage]);
 
+  // Check which view to show
+  const renderView = () => {
+    switch (view) {
+      case 'menu':
+        return (
+          <MainMenu 
+            playerName={playerName}
+            setPlayerName={setPlayerName}
+            onStartFreeRide={handleStartFreeRide}
+            onCreateRoom={() => setView('createRoom')}
+            onJoinRoom={() => setView('joinRoom')}
+          />
+        );
+      case 'createRoom':
+        return (
+          <CreateRoom 
+            onBack={() => setView('menu')}
+            onCreateRoom={handleCreateRoom}
+          />
+        );
+      case 'joinRoom':
+        return (
+          <JoinRoom 
+            availableRooms={availableRooms}
+            onBack={() => setView('menu')}
+            onJoinRoom={handleJoinRoom}
+            onRefreshRooms={getRoomsList}
+          />
+        );
+      case 'room':
+        return currentRoom && (
+          <RoomLobby 
+            room={currentRoom}
+            playerId={playerId}
+            isReady={isReady}
+            onBack={handleLeaveRoom}
+            onReady={handleSetReady}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <ThemeToggle />
 
-      {!isPlaying && !gameOver && (
-        <StartScreen 
-          playerName={playerName}
-          setPlayerName={setPlayerName}
-          handleStartGame={handleStartGame}
-        />
-      )}
+      {!isPlaying && !gameOver && renderView()}
 
       <Minimap 
         isMinimapVisible={isMinimapVisible}
@@ -248,9 +307,13 @@ const GameBoard: React.FC = () => {
         GRID_SIZE={GRID_SIZE}
       />
       
-      <PlayerScore score={score} />
-      <Leaderboard players={players} playerId={playerId} />
-      <SpeedBoost isSpeedBoostActive={isSpeedBoostActive} speedBoostPercentage={speedBoostPercentage} />
+      {isPlaying && !gameOver && (
+        <>
+          <PlayerScore score={score} />
+          <Leaderboard players={players} playerId={playerId} />
+          <SpeedBoost isSpeedBoostActive={isSpeedBoostActive} speedBoostPercentage={speedBoostPercentage} />
+        </>
+      )}
 
       <GameCanvas 
         players={players}
@@ -266,11 +329,13 @@ const GameBoard: React.FC = () => {
         currentPlayer={currentPlayer}
       />
 
-      <GameControls 
-        handleDirection={handleDirection}
-        speedBoostPercentage={speedBoostPercentage}
-        setIsSpeedBoostActive={setIsSpeedBoostActive}
-      />
+      {isPlaying && !gameOver && (
+        <GameControls 
+          handleDirection={handleDirection}
+          speedBoostPercentage={speedBoostPercentage}
+          setIsSpeedBoostActive={setIsSpeedBoostActive}
+        />
+      )}
 
       {gameOver && <GameOver score={score} />}
     </div>
@@ -278,6 +343,3 @@ const GameBoard: React.FC = () => {
 };
 
 export default GameBoard;
-
-
-// GOOD VERSION
