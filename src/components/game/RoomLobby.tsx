@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Copy, Check, Share2, RefreshCw } from 'lucide-react';
@@ -23,7 +23,7 @@ type RoomLobbyProps = {
   onToggleReady: () => void;
   onStartGame: () => void;
   onLeaveRoom: () => void;
-  onRefreshRoom?: () => void;  // New prop for manual refresh
+  onRefreshRoom?: () => void;  // For manual refresh
 };
 
 const RoomLobby: React.FC<RoomLobbyProps> = ({
@@ -47,6 +47,21 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
       .then(() => toast.success(message))
       .catch(() => toast.error("Failed to copy"));
   };
+  
+  // Add auto-refresh effect for room data
+  useEffect(() => {
+    if (onRefreshRoom) {
+      // Immediate refresh when component mounts
+      onRefreshRoom();
+      
+      // Regular refresh interval
+      const refreshInterval = setInterval(() => {
+        onRefreshRoom();
+      }, 2000); // Refresh every 2 seconds
+      
+      return () => clearInterval(refreshInterval);
+    }
+  }, [onRefreshRoom]);
 
   return (
     <div className="w-full">
@@ -136,7 +151,14 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
       
       <div className="flex gap-3">
         <Button 
-          onClick={onToggleReady}
+          onClick={() => {
+            onToggleReady();
+            // Also trigger a refresh immediately after toggling ready
+            if (onRefreshRoom) {
+              setTimeout(onRefreshRoom, 100);
+              setTimeout(onRefreshRoom, 500);
+            }
+          }}
           className={isReady ? "bg-gray-600 hover:bg-gray-700" : "bg-green-600 hover:bg-green-700 flex-1"}
         >
           {isReady ? "Cancel Ready" : "Ready"}

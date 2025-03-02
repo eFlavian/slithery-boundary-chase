@@ -267,11 +267,18 @@ export const useGameWebSocket = () => {
                 
               if (currentRoomIdNormalized === updateRoomIdNormalized) {
                 console.log('Room update received, updating players:', message.data.players);
-                setCurrentRoom({
-                  ...currentRoom,
-                  players: message.data.players
+                
+                setCurrentRoom(prevRoom => {
+                  if (!prevRoom) return null;
+                  return {
+                    ...prevRoom,
+                    players: [...message.data.players]
+                  };
                 });
+                
                 setAllPlayersReady(message.data.allPlayersReady);
+                
+                setTimeout(() => requestRoomUpdate(), 300);
               }
             }
             break;
@@ -280,6 +287,7 @@ export const useGameWebSocket = () => {
             if (currentRoom) {
               toast.info(`${message.data.playerName} left the room`);
               requestRoomUpdate();
+              setTimeout(() => requestRoomUpdate(), 300);
             }
             break;
 
@@ -287,6 +295,7 @@ export const useGameWebSocket = () => {
             if (currentRoom) {
               toast.info(`${message.data.playerName} joined the room`);
               requestRoomUpdate();
+              setTimeout(() => requestRoomUpdate(), 300);
             }
             break;
 
@@ -381,9 +390,11 @@ export const useGameWebSocket = () => {
       clearInterval(roomUpdateTimerRef.current);
     }
     
+    requestRoomUpdate();
+    
     roomUpdateTimerRef.current = window.setInterval(() => {
       requestRoomUpdate();
-    }, 500);
+    }, 250);
   };
 
   const requestRoomUpdate = () => {
@@ -391,11 +402,15 @@ export const useGameWebSocket = () => {
     
     try {
       if (wsRef.current.readyState === WebSocket.OPEN) {
+        const formattedRoomId = currentRoom.id.startsWith('room_')
+          ? currentRoom.id
+          : `room_${currentRoom.id.toLowerCase()}`;
+          
         console.log('Requesting room update for room:', currentRoom.id);
         wsRef.current.send(JSON.stringify({
           type: 'getRoomUpdate',
           playerId,
-          roomId: currentRoom.id.startsWith('room_') ? currentRoom.id : `room_${currentRoom.id.toLowerCase()}`
+          roomId: formattedRoomId
         }));
       }
     } catch (error) {
@@ -558,9 +573,9 @@ export const useGameWebSocket = () => {
       
       requestRoomUpdate();
       
-      setTimeout(() => {
-        requestRoomUpdate();
-      }, 300);
+      setTimeout(() => requestRoomUpdate(), 200);
+      setTimeout(() => requestRoomUpdate(), 500);
+      setTimeout(() => requestRoomUpdate(), 1000);
     } catch (error) {
       console.error('Error toggling ready state:', error);
       toast.error('Failed to update ready status. Please try again.');
@@ -653,6 +668,9 @@ export const useGameWebSocket = () => {
     
     if (currentRoom && playerId) {
       requestRoomUpdate();
+      
+      setTimeout(() => requestRoomUpdate(), 500);
+      setTimeout(() => requestRoomUpdate(), 1000);
     }
   }, [currentRoom]);
 
