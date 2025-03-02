@@ -7,3 +7,9 @@ export const CAMERA_SMOOTHING = 0.55;
 export const MIN_SNAKE_OPACITY = 0.3;
 export const MINIMAP_SIZE = 150;
 export const INACTIVE_PLAYER_OPACITY = 0.2;
+
+// Room constants
+export const MAX_ROOM_NAME_LENGTH = 20;
+export const DEFAULT_MAX_PLAYERS = 8;
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 16;

@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 
@@ -19,6 +18,7 @@ type Room = {
   createdBy: string;
   maxPlayers: number;
   gameStarted: boolean;
+  readyPlayers?: string[];
 };
 
 export const useGameWebSocket = () => {
@@ -199,7 +199,22 @@ export const useGameWebSocket = () => {
 
         case 'playerReady':
           if (currentRoom && message.data.roomId === currentRoom.id) {
-            // Update player ready status in the room
+            // Update the ready players list
+            setCurrentRoom(prev => {
+              if (!prev) return null;
+            
+              const readyPlayers = prev.readyPlayers || [];
+            
+              if (!readyPlayers.includes(message.data.playerId)) {
+                return {
+                  ...prev,
+                  readyPlayers: [...readyPlayers, message.data.playerId]
+                };
+              }
+            
+              return prev;
+            });
+          
             toast.info(`${message.data.playerName} is ready!`);
           }
           break;
@@ -208,6 +223,7 @@ export const useGameWebSocket = () => {
           toast.success('All players are ready! Game starting...');
           setIsPlaying(true);
           setGameOver(false);
+          setView('freeRide'); // Switch to the game view
           break;
 
         case 'error':
@@ -286,7 +302,10 @@ export const useGameWebSocket = () => {
   };
 
   const createRoom = (roomName: string, isPrivate: boolean, maxPlayers: number) => {
-    if (!wsRef.current || !playerId) return;
+    if (!wsRef.current || !playerId) {
+      toast.error("Connection to server lost. Please refresh the page.");
+      return;
+    }
     
     wsRef.current.send(JSON.stringify({
       type: 'createRoom',
@@ -295,6 +314,8 @@ export const useGameWebSocket = () => {
       isPrivate,
       maxPlayers
     }));
+    
+    // Handle room creation response in the onmessage handler
   };
 
   const joinRoom = (roomId: string, code?: string) => {
@@ -323,7 +344,10 @@ export const useGameWebSocket = () => {
   };
 
   const setPlayerReady = () => {
-    if (!wsRef.current || !playerId || !currentRoom) return;
+    if (!wsRef.current || !playerId || !currentRoom) {
+      toast.error("Connection to server lost. Please refresh the page.");
+      return;
+    }
     
     wsRef.current.send(JSON.stringify({
       type: 'playerReady',
@@ -362,6 +386,174 @@ export const useGameWebSocket = () => {
       }
     };
   }, []);
+
+  const handleWebSocketMessages = (data: any) => {
+    const message = JSON.parse(data);
+
+    switch (message.type) {
+      case 'init':
+        setPlayerId(message.data.playerId);
+        break;
+
+      case 'gameState':
+        setPlayers(message.data.players);
+        setFoods(message.data.foods);
+        setYellowDots(message.data.yellowDots || []);
+        setPortals(message.data.portals);
+        break;
+
+      case 'playerDeath':
+        toast(message.data.message);
+        break;
+
+      case 'gameOver':
+        setGameOver(true);
+        setIsPlaying(false);
+        setIsMinimapVisible(false);
+        if (minimapTimerRef.current) {
+          clearTimeout(minimapTimerRef.current);
+        }
+        if (minimapBlinkRef.current) {
+          clearInterval(minimapBlinkRef.current);
+        }
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+        }
+        toast.error(`Game Over! ${message.data.message}`);
+        break;
+          
+      case 'minimapUpdate':
+        // Clear any existing timers if this is a reset
+        if (message.data.reset) {
+          if (minimapTimerRef.current) {
+            clearTimeout(minimapTimerRef.current);
+          }
+          if (minimapBlinkRef.current) {
+            clearInterval(minimapBlinkRef.current);
+          }
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+          }
+        }
+          
+        setIsMinimapVisible(message.data.visible);
+        setMinimapTimeLeft(message.data.duration);
+          
+        // Start new countdown
+        let timeLeft = message.data.duration;
+          
+        // Clear existing countdown interval if it exists
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+        }
+          
+        countdownIntervalRef.current = window.setInterval(() => {
+          timeLeft -= 1;
+          setMinimapTimeLeft(timeLeft);
+            
+          // Start blinking when 3 seconds are left
+          if (timeLeft === 3) {
+            // Clear any existing blink interval
+            if (minimapBlinkRef.current) {
+              clearInterval(minimapBlinkRef.current);
+            }
+              
+            let isVisible = true;
+            minimapBlinkRef.current = window.setInterval(() => {
+              isVisible = !isVisible;
+              setIsMinimapVisible(isVisible);
+            }, 500);
+          }
+            
+          if (timeLeft <= 0) {
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current);
+            }
+          }
+        }, 1000);
+          
+        // Set timeout to stop the minimap visibility
+        minimapTimerRef.current = window.setTimeout(() => {
+          setIsMinimapVisible(false);
+          if (minimapBlinkRef.current) {
+            clearInterval(minimapBlinkRef.current);
+          }
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+          }
+        }, message.data.duration * 1000);
+        break;
+
+      case 'roomsList':
+        setAvailableRooms(message.data.rooms);
+        break;
+
+      case 'roomCreated':
+        setCurrentRoom(message.data.room);
+        setView('room');
+        toast.success(`Room "${message.data.room.name}" created successfully!`);
+        break;
+
+      case 'roomJoined':
+        setCurrentRoom(message.data.room);
+        setView('room');
+        toast.success(`Joined room "${message.data.room.name}"`);
+        break;
+
+      case 'playerJoinedRoom':
+        if (currentRoom && message.data.roomId === currentRoom.id) {
+          setCurrentRoom(prev => prev ? {
+            ...prev,
+            players: message.data.players
+          } : null);
+          toast.info(`${message.data.playerName} joined the room`);
+        }
+        break;
+
+      case 'playerLeftRoom':
+        if (currentRoom && message.data.roomId === currentRoom.id) {
+          setCurrentRoom(prev => prev ? {
+            ...prev,
+            players: message.data.players
+          } : null);
+          toast(`${message.data.playerName} left the room`);
+        }
+        break;
+
+      case 'playerReady':
+        if (currentRoom && message.data.roomId === currentRoom.id) {
+          // Update the ready players list
+          setCurrentRoom(prev => {
+            if (!prev) return null;
+            
+            const readyPlayers = prev.readyPlayers || [];
+            
+            if (!readyPlayers.includes(message.data.playerId)) {
+              return {
+                ...prev,
+                readyPlayers: [...readyPlayers, message.data.playerId]
+              };
+            }
+            
+            return prev;
+          });
+          
+          toast.info(`${message.data.playerName} is ready!`);
+        }
+        break;
+
+      case 'gameStarting':
+        toast.success('All players are ready! Game starting...');
+        setIsPlaying(true);
+        setGameOver(false);
+        setView('freeRide'); // Switch to the game view
+        break;
+
+      case 'error':
+        toast.error(message.data.message);
+        break;
+    }
+  };
 
   return {
     playerId,

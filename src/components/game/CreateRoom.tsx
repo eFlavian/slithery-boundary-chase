@@ -14,10 +14,15 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
   const [roomName, setRoomName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(8);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const handleCreateRoom = () => {
     if (!roomName.trim()) return;
+    
+    setIsSubmitting(true);
+    // Call the onCreateRoom function passed from the parent
     onCreateRoom(roomName.trim(), isPrivate, maxPlayers);
+    // The parent component (GameBoard) will handle the view change to the lobby
   };
   
   return (
@@ -28,6 +33,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
             variant="ghost" 
             className="p-2 mr-2 text-white/70 hover:text-white hover:bg-white/10"
             onClick={onBack}
+            disabled={isSubmitting}
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -48,6 +54,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
               className="bg-gray-900/60 border border-white/20 text-white"
               placeholder="My Snake Room"
               maxLength={20}
+              disabled={isSubmitting}
             />
           </div>
           
@@ -63,6 +70,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
               value={maxPlayers}
               onChange={(e) => setMaxPlayers(parseInt(e.target.value))}
               className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+              disabled={isSubmitting}
             />
           </div>
           
@@ -73,6 +81,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
                 isPrivate ? 'border-purple-500/50 bg-purple-900/20' : 'border-gray-600 bg-gray-800/30'
               }`}
               onClick={() => setIsPrivate(true)}
+              disabled={isSubmitting}
             >
               <Lock className={`w-4 h-4 ${isPrivate ? 'text-purple-400' : 'text-gray-400'}`} />
               <span className={isPrivate ? 'text-purple-300' : 'text-gray-300'}>Private</span>
@@ -84,6 +93,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
                 !isPrivate ? 'border-green-500/50 bg-green-900/20' : 'border-gray-600 bg-gray-800/30'
               }`}
               onClick={() => setIsPrivate(false)}
+              disabled={isSubmitting}
             >
               <Unlock className={`w-4 h-4 ${!isPrivate ? 'text-green-400' : 'text-gray-400'}`} />
               <span className={!isPrivate ? 'text-green-300' : 'text-gray-300'}>Public</span>
@@ -94,9 +104,9 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
         <Button
           onClick={handleCreateRoom}
           className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white py-3"
-          disabled={!roomName.trim()}
+          disabled={!roomName.trim() || isSubmitting}
         >
-          Create Room
+          {isSubmitting ? 'Creating Room...' : 'Create Room'}
         </Button>
       </div>
     </div>

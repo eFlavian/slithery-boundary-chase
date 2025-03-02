@@ -13,6 +13,7 @@ type Room = {
   createdBy: string;
   maxPlayers: number;
   gameStarted: boolean;
+  readyPlayers?: string[];
 };
 
 type RoomLobbyProps = {
@@ -35,6 +36,11 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
   const copyRoomCode = () => {
     navigator.clipboard.writeText(room.code);
     toast.success('Room code copied to clipboard');
+  };
+
+  // Check if a player is ready
+  const isPlayerReady = (playerId: string) => {
+    return room.readyPlayers?.includes(playerId) || false;
   };
   
   return (
@@ -104,8 +110,7 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
                   )}
                 </div>
                 <div>
-                  {/* This would normally show the ready status of each player */}
-                  {player === playerId && isReady ? (
+                  {isPlayerReady(player) ? (
                     <CheckCircle className="w-5 h-5 text-green-500" />
                   ) : (
                     <XCircle className="w-5 h-5 text-gray-500" />
