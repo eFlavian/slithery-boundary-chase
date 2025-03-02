@@ -47,6 +47,10 @@ const GameBoard: React.FC = () => {
     leaveSession
   } = useGameWebSocket();
 
+  const currentPlayer = players.find(p => p.id === playerId);
+  const score = currentPlayer?.score || 0;
+  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
+
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
   
@@ -55,10 +59,6 @@ const GameBoard: React.FC = () => {
   const cameraPositionRef = useRef({ x: 0, y: 0 });
   const lastUpdateTime = useRef(0);
   const animationFrameRef = useRef<number>();
-
-  const currentPlayer = players.find(p => p.id === playerId);
-  const score = currentPlayer?.score || 0;
-  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
 
   const handleDirection = (newDirection: Direction) => {
     const oppositeDirections = {
@@ -153,9 +153,13 @@ const GameBoard: React.FC = () => {
 
   useEffect(() => {
     if (!gameOver && playerId && isPlaying) {
+      console.log('Starting game loop, isPlaying:', isPlaying, 'playerId:', playerId);
       const speed = isSpeedBoostActive ? INITIAL_SPEED / 2 : INITIAL_SPEED;
       gameLoop.current = window.setInterval(updateGame, speed);
-      return () => clearInterval(gameLoop.current);
+      return () => {
+        console.log('Clearing game loop');
+        clearInterval(gameLoop.current);
+      };
     }
   }, [gameOver, direction, isSpeedBoostActive, playerId, isPlaying]);
 
@@ -194,16 +198,12 @@ const GameBoard: React.FC = () => {
   };
 
   useEffect(() => {
-    updateCamera();
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
+    console.log('Players updated:', players);
+    console.log('Current player:', currentPlayer);
+    console.log('isPlaying:', isPlaying);
+    
     if (currentPlayer?.snake?.[0]) {
+      console.log('Setting initial camera position for player:', currentPlayer.id);
       const containerWidth = window.innerWidth;
       const containerHeight = window.innerHeight;
 
@@ -212,7 +212,16 @@ const GameBoard: React.FC = () => {
         y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
       };
     }
-  }, [playerId]);
+  }, [players, currentPlayer, isPlaying]);
+
+  useEffect(() => {
+    updateCamera();
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);

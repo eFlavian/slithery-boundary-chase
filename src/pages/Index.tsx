@@ -61,6 +61,7 @@ const Index = () => {
   useEffect(() => {
     const codeFromUrl = searchParams.get('code');
     if (codeFromUrl && playerId && playerName) {
+      console.log('Joining session from URL code:', codeFromUrl);
       joinSession(codeFromUrl);
     }
   }, [searchParams, playerId, playerName]);
@@ -69,8 +70,11 @@ const Index = () => {
     if (!playerName.trim()) {
       return;
     }
+    console.log('Starting game with player name:', playerName.trim());
     startGame(playerName.trim());
   };
+  
+  console.log('Rendering Index component, isPlaying:', isPlaying);
   
   return (
     <>

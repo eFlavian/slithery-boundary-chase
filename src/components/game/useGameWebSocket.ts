@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -38,7 +37,6 @@ export const useGameWebSocket = () => {
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   
-  // Session state
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [isHost, setIsHost] = useState(false);
@@ -52,7 +50,6 @@ export const useGameWebSocket = () => {
   const countdownIntervalRef = useRef<number>();
 
   const connectToServer = () => {
-    // Fix for mobile: Use the current hostname instead of hardcoded localhost
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
     const wsUrl = `${protocol}//${wsHost}`;
@@ -73,6 +70,7 @@ export const useGameWebSocket = () => {
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
+      console.log('Received message:', message.type, message.data);
 
       switch (message.type) {
         case 'init':
@@ -80,6 +78,7 @@ export const useGameWebSocket = () => {
           break;
 
         case 'gameState':
+          console.log('Game state update:', message.data);
           setPlayers(message.data.players);
           setFoods(message.data.foods);
           setYellowDots(message.data.yellowDots || []);
@@ -107,7 +106,6 @@ export const useGameWebSocket = () => {
           break;
           
         case 'minimapUpdate':
-          // Clear any existing timers if this is a reset
           if (message.data.reset) {
             if (minimapTimerRef.current) {
               clearTimeout(minimapTimerRef.current);
@@ -123,10 +121,8 @@ export const useGameWebSocket = () => {
           setIsMinimapVisible(message.data.visible);
           setMinimapTimeLeft(message.data.duration);
           
-          // Start new countdown
           let timeLeft = message.data.duration;
           
-          // Clear existing countdown interval if it exists
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
@@ -135,9 +131,7 @@ export const useGameWebSocket = () => {
             timeLeft -= 1;
             setMinimapTimeLeft(timeLeft);
             
-            // Start blinking when 3 seconds are left
             if (timeLeft === 3) {
-              // Clear any existing blink interval
               if (minimapBlinkRef.current) {
                 clearInterval(minimapBlinkRef.current);
               }
@@ -156,7 +150,6 @@ export const useGameWebSocket = () => {
             }
           }, 1000);
           
-          // Set timeout to stop the minimap visibility
           minimapTimerRef.current = window.setTimeout(() => {
             setIsMinimapVisible(false);
             if (minimapBlinkRef.current) {
@@ -168,7 +161,6 @@ export const useGameWebSocket = () => {
           }, message.data.duration * 1000);
           break;
           
-        // Session-related messages
         case 'sessionsList':
           setSessions(message.data.sessions);
           break;
@@ -189,11 +181,20 @@ export const useGameWebSocket = () => {
         case 'sessionUpdated':
           setCurrentSession(message.data.session);
           
-          // Check if all players are ready and the game should start
           if (message.data.session.status === 'playing' && !isPlaying) {
             setIsPlaying(true);
             setGameOver(false);
             toast.success('All players ready! Game starting...');
+            
+            const playerNames = new Map();
+            message.data.session.players.forEach(player => {
+              playerNames.set(player.id, player.name);
+            });
+            
+            if (playerId && playerNames.has(playerId)) {
+              console.log('Auto-spawning player:', playerId, playerNames.get(playerId));
+              startGame(playerNames.get(playerId));
+            }
           }
           break;
           
@@ -201,7 +202,6 @@ export const useGameWebSocket = () => {
           if (message.data.playerId === playerId) {
             setIsReady(message.data.isReady);
           }
-          // The full session state will come in sessionUpdated
           break;
           
         case 'sessionError':
@@ -225,7 +225,6 @@ export const useGameWebSocket = () => {
       console.log('Disconnected from server');
       toast.error('Disconnected from game server');
       
-      // Attempt to reconnect with exponential backoff
       if (reconnectAttempts < 5) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
         console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
@@ -276,7 +275,6 @@ export const useGameWebSocket = () => {
     }));
   };
 
-  // Session-related methods
   const createSession = (sessionName: string, visibility: SessionVisibility = 'private') => {
     if (!wsRef.current || !playerId) return;
     
@@ -352,13 +350,18 @@ export const useGameWebSocket = () => {
   const startGame = (playerName: string) => {
     if (!wsRef.current || !playerId) return;
     
+    console.log('Starting game with player name:', playerName);
     wsRef.current.send(JSON.stringify({
       type: 'spawn',
       playerName,
       playerId
     }));
     
-    setIsPlaying(true);
+    if (!currentSession) {
+      setIsPlaying(true);
+    }
+    
+    setGameOver(false);
   };
 
   useEffect(() => {
@@ -397,7 +400,6 @@ export const useGameWebSocket = () => {
     startGame,
     setGameOver,
     setIsPlaying,
-    // Session-related properties and methods
     sessions,
     currentSession,
     isHost,
