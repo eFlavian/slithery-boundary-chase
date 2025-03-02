@@ -425,7 +425,9 @@ export const useGameWebSocket = () => {
       roomName,
       isPublic,
       maxPlayers,
-      generateSimpleCode: true
+      generateSimpleCode: true,
+      simpleCodeLength: 5,
+      simpleCodeFormat: 'ALPHANUMERIC_UPPER'
     };
     
     console.log('Sending createRoom request:', request);
