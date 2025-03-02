@@ -55,6 +55,7 @@ export const useGameWebSocket = () => {
   const countdownIntervalRef = useRef<number>();
   const lastSocketMessageRef = useRef<number>(Date.now());
   const pendingRoomCreationRef = useRef<boolean>(false);
+  const roomUpdateTimerRef = useRef<number>();
 
   const connectToServer = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -85,6 +86,10 @@ export const useGameWebSocket = () => {
         } catch (error) {
           console.error('Error sending ping after reconnect:', error);
         }
+      }
+      
+      if (currentRoom && playerId) {
+        requestRoomUpdate();
       }
     };
 
@@ -213,6 +218,8 @@ export const useGameWebSocket = () => {
             setIsReady(false);
             
             toast.success(`Room "${message.data.roomName}" created. Room code: ${message.data.roomId}`);
+            
+            startRoomUpdateInterval();
             break;
 
           case 'roomJoined':
@@ -225,6 +232,8 @@ export const useGameWebSocket = () => {
             setIsHost(message.data.isHost);
             setIsReady(false);
             toast.success(`Joined room "${message.data.roomName}"`);
+            
+            startRoomUpdateInterval();
             break;
 
           case 'roomUpdate':
@@ -240,12 +249,14 @@ export const useGameWebSocket = () => {
           case 'playerLeft':
             if (currentRoom) {
               toast.info(`${message.data.playerName} left the room`);
+              requestRoomUpdate();
             }
             break;
 
           case 'playerJoined':
             if (currentRoom) {
               toast.info(`${message.data.playerName} joined the room`);
+              requestRoomUpdate();
             }
             break;
 
@@ -278,6 +289,10 @@ export const useGameWebSocket = () => {
     ws.onclose = () => {
       console.log('Disconnected from server');
       toast.error('Disconnected from game server');
+      
+      if (roomUpdateTimerRef.current) {
+        clearInterval(roomUpdateTimerRef.current);
+      }
       
       if (reconnectAttempts < 5) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
@@ -329,6 +344,26 @@ export const useGameWebSocket = () => {
     return () => {
       clearInterval(healthCheckInterval);
     };
+  };
+
+  const startRoomUpdateInterval = () => {
+    if (roomUpdateTimerRef.current) {
+      clearInterval(roomUpdateTimerRef.current);
+    }
+    
+    roomUpdateTimerRef.current = window.setInterval(() => {
+      requestRoomUpdate();
+    }, 3000);
+  };
+
+  const requestRoomUpdate = () => {
+    if (!wsRef.current || !playerId || !currentRoom) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'getRoomUpdate',
+      playerId,
+      roomId: currentRoom.id
+    }));
   };
 
   const sendDirection = (direction: Direction) => {
@@ -389,7 +424,8 @@ export const useGameWebSocket = () => {
       playerId,
       roomName,
       isPublic,
-      maxPlayers
+      maxPlayers,
+      generateSimpleCode: true
     };
     
     console.log('Sending createRoom request:', request);
@@ -421,12 +457,16 @@ export const useGameWebSocket = () => {
     wsRef.current.send(JSON.stringify({
       type: 'joinRoom',
       playerId,
-      roomId
+      roomId: roomId.toUpperCase()
     }));
   };
 
   const leaveRoom = () => {
     if (!wsRef.current || !playerId || !currentRoom) return;
+    
+    if (roomUpdateTimerRef.current) {
+      clearInterval(roomUpdateTimerRef.current);
+    }
     
     wsRef.current.send(JSON.stringify({
       type: 'leaveRoom',
@@ -452,6 +492,8 @@ export const useGameWebSocket = () => {
     }));
     
     setIsReady(newReadyState);
+    
+    requestRoomUpdate();
   };
 
   const startRoomGame = () => {
@@ -491,6 +533,9 @@ export const useGameWebSocket = () => {
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
       }
+      if (roomUpdateTimerRef.current) {
+        clearInterval(roomUpdateTimerRef.current);
+      }
     };
   }, []);
 
@@ -508,6 +553,10 @@ export const useGameWebSocket = () => {
 
   useEffect(() => {
     console.log('currentRoom state changed:', currentRoom);
+    
+    if (currentRoom && playerId) {
+      requestRoomUpdate();
+    }
   }, [currentRoom]);
 
   return {

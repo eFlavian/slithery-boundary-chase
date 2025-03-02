@@ -74,7 +74,7 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
             className="flex items-center gap-2"
             onClick={() => copyToClipboard(roomId, "Room code copied to clipboard!")}
           >
-            <span className="truncate max-w-32">Code: {roomId}</span>
+            <span className="font-mono text-sm tracking-wider">{roomId}</span>
             <Copy className="h-3.5 w-3.5" />
           </Button>
           

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Play } from 'lucide-react';
 import RoomsList from './RoomsList';
@@ -60,6 +61,21 @@ const MainMenu: React.FC<MainMenuProps> = ({
   const [view, setView] = useState<'main' | 'rooms' | 'create'>('main');
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [lastViewChangeTime, setLastViewChangeTime] = useState(Date.now());
+
+  // Load saved player name from localStorage on component mount
+  useEffect(() => {
+    const savedName = localStorage.getItem('playerName');
+    if (savedName && !playerName) {
+      setPlayerName(savedName);
+    }
+  }, []);
+
+  // Save player name to localStorage when it changes
+  useEffect(() => {
+    if (playerName) {
+      localStorage.setItem('playerName', playerName);
+    }
+  }, [playerName]);
 
   useEffect(() => {
     if (currentRoom) {
@@ -182,9 +198,14 @@ const MainMenu: React.FC<MainMenuProps> = ({
                   <input
                     type="text"
                     value={roomCodeInput}
-                    onChange={(e) => setRoomCodeInput(e.target.value)}
-                    className="flex-1 px-4 py-2 bg-gray-900/60 border border-white/20 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(e) => {
+                      // Convert to uppercase and allow only alphanumeric characters
+                      const filtered = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                      setRoomCodeInput(filtered);
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-900/60 border border-white/20 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono tracking-wider"
                     placeholder="Room Code"
+                    maxLength={5}
                     disabled={!playerName.trim()}
                   />
                   <button
