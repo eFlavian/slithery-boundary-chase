@@ -3,6 +3,7 @@ import { Play } from 'lucide-react';
 import RoomsList from './RoomsList';
 import CreateRoom from './CreateRoom';
 import RoomLobby from './RoomLobby';
+import { toast } from 'sonner';
 
 type Room = {
   id: string;
@@ -59,24 +60,35 @@ const MainMenu: React.FC<MainMenuProps> = ({
   const [view, setView] = useState<'main' | 'rooms' | 'create'>('main');
   const [roomCodeInput, setRoomCodeInput] = useState('');
 
-  // Check for room parameter in URL when component mounts
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const roomParam = queryParams.get('room');
     
     if (roomParam && playerName) {
       onJoinRoom(roomParam);
-      // Clear the URL parameter after joining
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [playerName, onJoinRoom]);
 
-  // Handle room creation
+  useEffect(() => {
+    if (!currentRoom && view !== 'main') {
+      setView('main');
+    }
+  }, [currentRoom]);
+
   const handleCreateRoom = (roomName: string, isPublic: boolean, maxPlayers: number) => {
     console.log('MainMenu handling room creation:', roomName, isPublic, maxPlayers);
-    if (playerName.trim()) {
+    
+    if (!playerName.trim()) {
+      toast.error("Please enter your name before creating a room");
+      return;
+    }
+
+    try {
       onCreateRoom(roomName, isPublic, maxPlayers);
-      // We don't need to change the view manually here, as it will update based on currentRoom
+    } catch (error) {
+      console.error('Error in handleCreateRoom:', error);
+      toast.error('Failed to create room. Please try again.');
     }
   };
 
@@ -87,8 +99,8 @@ const MainMenu: React.FC<MainMenuProps> = ({
     }
   };
 
-  // If player is in a room, show room lobby
   if (currentRoom) {
+    console.log('Showing room lobby for room:', currentRoom);
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
         <div className="bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-6 max-w-md w-full">

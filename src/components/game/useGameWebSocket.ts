@@ -174,7 +174,14 @@ export const useGameWebSocket = () => {
           break;
 
         case 'roomCreated':
-          console.log('Room created:', message.data);
+          console.log('Room created successfully:', message.data);
+          
+          if (!message.data.roomId) {
+            console.error('Invalid room data received:', message.data);
+            toast.error('Error creating room: Invalid room data');
+            return;
+          }
+          
           setCurrentRoom({
             id: message.data.roomId,
             name: message.data.roomName,
@@ -301,17 +308,26 @@ export const useGameWebSocket = () => {
   };
 
   const createRoom = (roomName: string, isPublic: boolean, maxPlayers: number) => {
-    if (!wsRef.current || !playerId) return;
+    if (!wsRef.current || !playerId) {
+      console.error('Cannot create room: No WebSocket connection or player ID');
+      toast.error('Cannot create room. Try refreshing the page.');
+      return;
+    }
     
     console.log('Sending createRoom request:', { roomName, isPublic, maxPlayers, playerId });
     
-    wsRef.current.send(JSON.stringify({
-      type: 'createRoom',
-      playerId,
-      roomName,
-      isPublic,
-      maxPlayers
-    }));
+    try {
+      wsRef.current.send(JSON.stringify({
+        type: 'createRoom',
+        playerId,
+        roomName,
+        isPublic,
+        maxPlayers
+      }));
+    } catch (error) {
+      console.error('Error sending createRoom request:', error);
+      toast.error('Failed to create room. Please try again.');
+    }
   };
 
   const joinRoom = (roomId: string) => {
