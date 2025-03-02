@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Play } from 'lucide-react';
 import RoomsList from './RoomsList';
@@ -77,6 +76,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
     console.log('MainMenu handling room creation:', roomName, isPublic, maxPlayers);
     if (playerName.trim()) {
       onCreateRoom(roomName, isPublic, maxPlayers);
+      // We don't need to change the view manually here, as it will update based on currentRoom
     }
   };
 

@@ -20,6 +20,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack }) => {
     if (roomName.trim()) {
       console.log('Creating room:', roomName, isPublic, maxPlayers);
       onCreateRoom(roomName.trim(), isPublic, maxPlayers);
+      // Note: No need to change view here, the parent component will handle that
     }
   };
 

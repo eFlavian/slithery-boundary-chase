@@ -75,6 +75,7 @@ export const useGameWebSocket = () => {
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
+      console.log('Received message:', message);
 
       switch (message.type) {
         case 'init':
@@ -173,6 +174,7 @@ export const useGameWebSocket = () => {
           break;
 
         case 'roomCreated':
+          console.log('Room created:', message.data);
           setCurrentRoom({
             id: message.data.roomId,
             name: message.data.roomName,
@@ -300,6 +302,8 @@ export const useGameWebSocket = () => {
 
   const createRoom = (roomName: string, isPublic: boolean, maxPlayers: number) => {
     if (!wsRef.current || !playerId) return;
+    
+    console.log('Sending createRoom request:', { roomName, isPublic, maxPlayers, playerId });
     
     wsRef.current.send(JSON.stringify({
       type: 'createRoom',
