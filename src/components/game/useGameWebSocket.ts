@@ -1,6 +1,6 @@
+
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import * as web3 from '@solana/web3.js';
 
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type Position = {
@@ -21,8 +21,6 @@ export const useGameWebSocket = () => {
   const [isMinimapVisible, setIsMinimapVisible] = useState(false);
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
-  // Add state for wallet
-  const [playerWallet, setPlayerWallet] = useState<web3.Keypair | null>(null);
   
   const wsRef = useRef<WebSocket | null>(null);
   const minimapTimerRef = useRef<number>();
@@ -48,23 +46,6 @@ export const useGameWebSocket = () => {
       console.log('Connected to server');
       toast.success('Connected to game server');
       setReconnectAttempts(0);
-      
-      // Load wallet and send wallet info to server
-      const storedWallet = localStorage.getItem('snakeWallet');
-      if (storedWallet) {
-        try {
-          const keypairData = JSON.parse(storedWallet);
-          const walletPublicKey = keypairData.publicKey;
-          
-          // Send wallet info to server
-          ws.send(JSON.stringify({
-            type: 'walletInfo',
-            publicKey: walletPublicKey
-          }));
-        } catch (error) {
-          console.error('Error loading wallet for server:', error);
-        }
-      }
     };
 
     ws.onmessage = (event) => {
@@ -163,19 +144,6 @@ export const useGameWebSocket = () => {
             }
           }, message.data.duration * 1000);
           break;
-          
-        case 'walletUpdate':
-          // Handle wallet balance updates from server
-          if (message.data.balance !== undefined) {
-            // Update local wallet balance display if needed
-            toast.success(`Wallet balance updated: ${message.data.balance} SOL`);
-          }
-          break;
-          
-        case 'paymentRequired':
-          toast.error('Payment required to continue playing');
-          setIsPlaying(false);
-          break;
       }
     };
 
@@ -237,24 +205,10 @@ export const useGameWebSocket = () => {
   const startGame = (playerName: string) => {
     if (!wsRef.current || !playerId) return;
     
-    // Get wallet from localStorage
-    const storedWallet = localStorage.getItem('snakeWallet');
-    let walletPublicKey = '';
-    
-    if (storedWallet) {
-      try {
-        const keypairData = JSON.parse(storedWallet);
-        walletPublicKey = keypairData.publicKey;
-      } catch (error) {
-        console.error('Error loading wallet for game start:', error);
-      }
-    }
-    
     wsRef.current.send(JSON.stringify({
       type: 'spawn',
       playerName,
-      playerId,
-      walletPublicKey // Send wallet public key with spawn request
+      playerId
     }));
     
     setIsPlaying(true);
