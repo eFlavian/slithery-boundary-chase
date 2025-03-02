@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { MAX_ROOM_NAME_LENGTH, MIN_PLAYERS, MAX_PLAYERS, DEFAULT_MAX_PLAYERS } from './gameConstants';
+import { useToast } from "@/hooks/use-toast";
 
 type CreateRoomProps = {
   onBack: () => void;
@@ -16,14 +17,38 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
   const [isPrivate, setIsPrivate] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(DEFAULT_MAX_PLAYERS);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
   
   const handleCreateRoom = () => {
-    if (!roomName.trim()) return;
+    if (!roomName.trim()) {
+      toast({
+        title: "Error",
+        description: "Room name cannot be empty",
+        variant: "destructive",
+      });
+      return;
+    }
     
     setIsSubmitting(true);
-    // Call the onCreateRoom function passed from the parent
-    onCreateRoom(roomName.trim(), isPrivate, maxPlayers);
-    // The parent component will handle the view change to the lobby
+    
+    try {
+      // Log the room creation attempt
+      console.log(`Creating room with name: ${roomName}, private: ${isPrivate}, maxPlayers: ${maxPlayers}`);
+      
+      // Call the onCreateRoom function passed from the parent
+      onCreateRoom(roomName.trim(), isPrivate, maxPlayers);
+      
+      // Note: We don't reset isSubmitting here since the parent component should handle view changes
+      // upon successful room creation via the websocket callback
+    } catch (error) {
+      console.error("Error creating room:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create room. Please try again.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+    }
   };
   
   return (

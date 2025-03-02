@@ -1,6 +1,7 @@
 
 import { useEffect } from "react";
 import GameBoard from "@/components/GameBoard";
+import { Toaster } from "@/components/ui/toaster";
 
 const Index = () => {
   // Prevent touch devices from zooming when double-tapping the game
@@ -24,7 +25,12 @@ const Index = () => {
     };
   }, []);
   
-  return <GameBoard />;
+  return (
+    <>
+      <GameBoard />
+      <Toaster />
+    </>
+  );
 };
 
 export default Index;

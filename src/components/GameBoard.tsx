@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import ThemeToggle from './game/ThemeToggle';
@@ -72,6 +71,11 @@ const GameBoard: React.FC = () => {
   };
 
   const handleCreateRoom = (roomName: string, isPrivate: boolean, maxPlayers: number) => {
+    console.log(`GameBoard: Creating room: ${roomName}, private: ${isPrivate}, maxPlayers: ${maxPlayers}`);
+    if (!playerName.trim()) {
+      toast.error("Please enter a name first!");
+      return;
+    }
     createRoom(roomName, isPrivate, maxPlayers);
   };
 
@@ -245,7 +249,6 @@ const GameBoard: React.FC = () => {
     };
   }, [direction, currentPlayer?.speedBoostPercentage]);
 
-  // Check which view to show
   const renderView = () => {
     switch (view) {
       case 'menu':

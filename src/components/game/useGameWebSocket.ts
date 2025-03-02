@@ -65,6 +65,7 @@ export const useGameWebSocket = () => {
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
+      console.log('Received websocket message:', message);
 
       switch (message.type) {
         case 'init':
@@ -159,6 +160,7 @@ export const useGameWebSocket = () => {
           break;
 
         case 'roomCreated':
+          console.log('Room created successfully:', message.data.room);
           setCurrentRoom(message.data.room);
           setView('room');
           toast.success(`Room "${message.data.room.name}" created successfully!`);
@@ -298,14 +300,15 @@ export const useGameWebSocket = () => {
       return;
     }
     
-    console.log(`Creating room: ${roomName}, private: ${isPrivate}, maxPlayers: ${maxPlayers}`);
+    console.log(`Creating room: ${roomName}, private: ${isPrivate}, maxPlayers: ${maxPlayers}, playerName: ${window.localStorage.getItem('playerName') || 'Unknown'}`);
     
     wsRef.current.send(JSON.stringify({
       type: 'createRoom',
       playerId,
       roomName,
       isPrivate,
-      maxPlayers
+      maxPlayers,
+      playerName: window.localStorage.getItem('playerName') || 'Unknown'
     }));
   };
 
@@ -383,6 +386,7 @@ export const useGameWebSocket = () => {
 
   const handleWebSocketMessages = (data: any) => {
     const message = JSON.parse(data);
+    console.log('Received websocket message:', message);
 
     switch (message.type) {
       case 'init':
@@ -477,6 +481,7 @@ export const useGameWebSocket = () => {
         break;
 
       case 'roomCreated':
+        console.log('Room created successfully:', message.data.room);
         setCurrentRoom(message.data.room);
         setView('room');
         toast.success(`Room "${message.data.room.name}" created successfully!`);
