@@ -55,7 +55,8 @@ const GameBoard: React.FC = () => {
     joinRoom,
     leaveRoom,
     toggleReady,
-    startRoomGame
+    startRoomGame,
+    requestRoomUpdate
   } = useGameWebSocket();
 
   const [direction, setDirection] = useState<Direction>('RIGHT');
@@ -254,6 +255,7 @@ const GameBoard: React.FC = () => {
           onLeaveRoom={leaveRoom}
           onToggleReady={toggleReady}
           onStartGame={startRoomGame}
+          requestRoomUpdate={requestRoomUpdate}
         />
       )}
 

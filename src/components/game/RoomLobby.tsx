@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Share2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Player = {
@@ -23,6 +23,7 @@ type RoomLobbyProps = {
   onToggleReady: () => void;
   onStartGame: () => void;
   onLeaveRoom: () => void;
+  onRefresh?: () => void;  // New prop for manual refresh
 };
 
 const RoomLobby: React.FC<RoomLobbyProps> = ({
@@ -36,6 +37,7 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
   onToggleReady,
   onStartGame,
   onLeaveRoom,
+  onRefresh,
 }) => {
   // Generate a shareable link with the room ID
   const shareableLink = `${window.location.origin}?room=${roomId}`;
@@ -45,6 +47,9 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
       .then(() => toast.success(message))
       .catch(() => toast.error("Failed to copy"));
   };
+
+  // Format room ID to display without 'room_' prefix
+  const displayRoomId = roomId.startsWith('room_') ? roomId.substring(5).toUpperCase() : roomId.toUpperCase();
 
   return (
     <div className="w-full">
@@ -72,9 +77,9 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
             variant="outline"
             size="sm"
             className="flex items-center gap-2"
-            onClick={() => copyToClipboard(roomId, "Room code copied to clipboard!")}
+            onClick={() => copyToClipboard(displayRoomId, "Room code copied to clipboard!")}
           >
-            <span className="font-mono text-sm tracking-wider">{roomId}</span>
+            <span className="font-mono text-sm tracking-wider">{displayRoomId}</span>
             <Copy className="h-3.5 w-3.5" />
           </Button>
           
@@ -88,6 +93,21 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
             <span>Share Link</span>
           </Button>
         </div>
+      </div>
+      
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="text-sm font-medium text-white/80">Players</h4>
+        {onRefresh && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRefresh}
+            className="h-8 w-8 p-0 rounded-full"
+            title="Refresh player list"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        )}
       </div>
       
       <div className="space-y-2 max-h-40 overflow-y-auto mb-6">
