@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -374,26 +373,19 @@ export const useGameWebSocket = () => {
       clearInterval(roomUpdateTimerRef.current);
     }
     
-    // Set a more frequent update interval for better synchronization (1.5 seconds)
     roomUpdateTimerRef.current = window.setInterval(() => {
       requestRoomUpdate();
-    }, 1500);
+    }, 3000);
   };
 
   const requestRoomUpdate = () => {
     if (!wsRef.current || !playerId || !currentRoom) return;
     
-    try {
-      wsRef.current.send(JSON.stringify({
-        type: 'getRoomUpdate',
-        playerId,
-        roomId: currentRoom.id.startsWith('room_') ? 
-          currentRoom.id : 
-          `room_${currentRoom.id.toLowerCase()}`
-      }));
-    } catch (error) {
-      console.error('Error requesting room update:', error);
-    }
+    wsRef.current.send(JSON.stringify({
+      type: 'getRoomUpdate',
+      playerId,
+      roomId: currentRoom.id
+    }));
   };
 
   const sendDirection = (direction: Direction) => {
@@ -506,14 +498,10 @@ export const useGameWebSocket = () => {
       clearInterval(roomUpdateTimerRef.current);
     }
     
-    const formattedRoomId = currentRoom.id.startsWith('room_')
-      ? currentRoom.id
-      : `room_${currentRoom.id.toLowerCase()}`;
-    
     wsRef.current.send(JSON.stringify({
       type: 'leaveRoom',
       playerId,
-      roomId: formattedRoomId
+      roomId: currentRoom.id
     }));
     
     setCurrentRoom(null);
@@ -526,36 +514,25 @@ export const useGameWebSocket = () => {
     
     const newReadyState = !isReady;
     
-    const formattedRoomId = currentRoom.id.startsWith('room_')
-      ? currentRoom.id
-      : `room_${currentRoom.id.toLowerCase()}`;
-    
     wsRef.current.send(JSON.stringify({
       type: 'toggleReady',
       playerId,
-      roomId: formattedRoomId,
+      roomId: currentRoom.id,
       isReady: newReadyState
     }));
     
     setIsReady(newReadyState);
     
-    // Request immediate update after toggling ready status
-    setTimeout(() => {
-      requestRoomUpdate();
-    }, 100);
+    requestRoomUpdate();
   };
 
   const startRoomGame = () => {
     if (!wsRef.current || !playerId || !currentRoom || !isHost || !allPlayersReady) return;
     
-    const formattedRoomId = currentRoom.id.startsWith('room_')
-      ? currentRoom.id
-      : `room_${currentRoom.id.toLowerCase()}`;
-    
     wsRef.current.send(JSON.stringify({
       type: 'startGame',
       playerId,
-      roomId: formattedRoomId
+      roomId: currentRoom.id
     }));
   };
 
@@ -608,11 +585,7 @@ export const useGameWebSocket = () => {
     console.log('currentRoom state changed:', currentRoom);
     
     if (currentRoom && playerId) {
-      // Request immediate update when room changes
       requestRoomUpdate();
-      
-      // Start a more frequent update interval
-      startRoomUpdateInterval();
     }
   }, [currentRoom]);
 
@@ -641,8 +614,7 @@ export const useGameWebSocket = () => {
     joinRoom,
     leaveRoom,
     toggleReady,
-    startRoomGame,
-    requestRoomUpdate
+    startRoomGame
   };
 };
 
