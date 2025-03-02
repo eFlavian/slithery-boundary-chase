@@ -28,7 +28,6 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
     if (currentRoom && isSubmitting) {
       console.log('Room creation successful, currentRoom updated:', currentRoom);
       setIsSubmitting(false);
-      // No need to do anything else, the parent component will handle the view change
     }
   }, [currentRoom, isSubmitting]);
 
@@ -40,10 +39,13 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
       return;
     }
     
+    // If already submitting, prevent multiple submissions
+    if (isSubmitting) return;
+    
     setIsSubmitting(true);
     
     try {
-      console.log('Creating room:', roomName, isPublic, maxPlayers);
+      console.log('CreateRoom: Creating room:', roomName, isPublic, maxPlayers);
       onCreateRoom(roomName.trim(), isPublic, maxPlayers);
       
       // Set a timeout to reset the submitting state if no response after 5 seconds

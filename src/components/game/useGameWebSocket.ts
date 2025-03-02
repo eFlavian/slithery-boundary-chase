@@ -74,47 +74,34 @@ export const useGameWebSocket = () => {
     };
 
     ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      console.log('Received message:', message);
+      try {
+        const message = JSON.parse(event.data);
+        console.log('Received message:', message);
 
-      switch (message.type) {
-        case 'init':
-          setPlayerId(message.data.playerId);
-          break;
+        switch (message.type) {
+          case 'init':
+            setPlayerId(message.data.playerId);
+            break;
 
-        case 'gameState':
-          setPlayers(message.data.players);
-          setFoods(message.data.foods);
-          setYellowDots(message.data.yellowDots || []);
-          setPortals(message.data.portals);
-          break;
+          case 'gameState':
+            setPlayers(message.data.players);
+            setFoods(message.data.foods);
+            setYellowDots(message.data.yellowDots || []);
+            setPortals(message.data.portals);
+            break;
 
-        case 'playerDeath':
-          toast(message.data.message);
-          break;
+          case 'playerDeath':
+            toast(message.data.message);
+            break;
 
-        case 'gameOver':
-          setGameOver(true);
-          setIsPlaying(false);
-          setIsMinimapVisible(false);
-          setCurrentRoom(null);
-          setIsHost(false);
-          setIsReady(false);
-          
-          if (minimapTimerRef.current) {
-            clearTimeout(minimapTimerRef.current);
-          }
-          if (minimapBlinkRef.current) {
-            clearInterval(minimapBlinkRef.current);
-          }
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-          }
-          toast.error(`Game Over! ${message.data.message}`);
-          break;
-          
-        case 'minimapUpdate':
-          if (message.data.reset) {
+          case 'gameOver':
+            setGameOver(true);
+            setIsPlaying(false);
+            setIsMinimapVisible(false);
+            setCurrentRoom(null);
+            setIsHost(false);
+            setIsReady(false);
+            
             if (minimapTimerRef.current) {
               clearTimeout(minimapTimerRef.current);
             }
@@ -124,130 +111,141 @@ export const useGameWebSocket = () => {
             if (countdownIntervalRef.current) {
               clearInterval(countdownIntervalRef.current);
             }
-          }
-          
-          setIsMinimapVisible(message.data.visible);
-          setMinimapTimeLeft(message.data.duration);
-          
-          let timeLeft = message.data.duration;
-          
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-          }
-          
-          countdownIntervalRef.current = window.setInterval(() => {
-            timeLeft -= 1;
-            setMinimapTimeLeft(timeLeft);
+            toast.error(`Game Over! ${message.data.message}`);
+            break;
             
-            if (timeLeft === 3) {
+          case 'minimapUpdate':
+            if (message.data.reset) {
+              if (minimapTimerRef.current) {
+                clearTimeout(minimapTimerRef.current);
+              }
               if (minimapBlinkRef.current) {
                 clearInterval(minimapBlinkRef.current);
               }
-              
-              let isVisible = true;
-              minimapBlinkRef.current = window.setInterval(() => {
-                isVisible = !isVisible;
-                setIsMinimapVisible(isVisible);
-              }, 500);
-            }
-            
-            if (timeLeft <= 0) {
               if (countdownIntervalRef.current) {
                 clearInterval(countdownIntervalRef.current);
               }
             }
-          }, 1000);
-          
-          minimapTimerRef.current = window.setTimeout(() => {
-            setIsMinimapVisible(false);
-            if (minimapBlinkRef.current) {
-              clearInterval(minimapBlinkRef.current);
-            }
+            
+            setIsMinimapVisible(message.data.visible);
+            setMinimapTimeLeft(message.data.duration);
+            
+            let timeLeft = message.data.duration;
+            
             if (countdownIntervalRef.current) {
               clearInterval(countdownIntervalRef.current);
             }
-          }, message.data.duration * 1000);
-          break;
+            
+            countdownIntervalRef.current = window.setInterval(() => {
+              timeLeft -= 1;
+              setMinimapTimeLeft(timeLeft);
+              
+              if (timeLeft === 3) {
+                if (minimapBlinkRef.current) {
+                  clearInterval(minimapBlinkRef.current);
+                }
+                
+                let isVisible = true;
+                minimapBlinkRef.current = window.setInterval(() => {
+                  isVisible = !isVisible;
+                  setIsMinimapVisible(isVisible);
+                }, 500);
+              }
+              
+              if (timeLeft <= 0) {
+                if (countdownIntervalRef.current) {
+                  clearInterval(countdownIntervalRef.current);
+                }
+              }
+            }, 1000);
+            
+            minimapTimerRef.current = window.setTimeout(() => {
+              setIsMinimapVisible(false);
+              if (minimapBlinkRef.current) {
+                clearInterval(minimapBlinkRef.current);
+              }
+              if (countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
+              }
+            }, message.data.duration * 1000);
+            break;
 
-        case 'publicRooms':
-          setPublicRooms(message.data.rooms);
-          break;
+          case 'publicRooms':
+            setPublicRooms(message.data.rooms);
+            break;
 
-        case 'roomCreated':
-          console.log('Room created successfully:', message.data);
-          
-          if (!message.data.roomId) {
-            console.error('Invalid room data received:', message.data);
-            toast.error('Error creating room: Invalid room data');
-            return;
-          }
-          
-          console.log('Setting currentRoom with data:', message.data);
-          
-          setCurrentRoom({
-            id: message.data.roomId,
-            name: message.data.roomName,
-            isPublic: message.data.isPublic,
-            players: message.data.players
-          });
-          setIsHost(true);
-          setIsReady(false);
-          
-          console.log('CurrentRoom state updated, now:', {
-            id: message.data.roomId,
-            name: message.data.roomName,
-            isPublic: message.data.isPublic,
-            players: message.data.players
-          });
-          
-          toast.success(`Room "${message.data.roomName}" created`);
-          break;
+          case 'roomCreated':
+            console.log('Room created response received:', message.data);
+            
+            if (!message.data.roomId) {
+              console.error('Invalid room data received:', message.data);
+              toast.error('Error creating room: Invalid room data');
+              return;
+            }
+            
+            const newRoom = {
+              id: message.data.roomId,
+              name: message.data.roomName,
+              isPublic: message.data.isPublic,
+              players: message.data.players
+            };
+            
+            console.log('Setting currentRoom to:', newRoom);
+            setCurrentRoom(newRoom);
+            setIsHost(true);
+            setIsReady(false);
+            
+            toast.success(`Room "${message.data.roomName}" created`);
+            break;
 
-        case 'roomJoined':
-          setCurrentRoom({
-            id: message.data.roomId,
-            name: message.data.roomName,
-            isPublic: message.data.isPublic,
-            players: message.data.players
-          });
-          setIsHost(message.data.isHost);
-          setIsReady(false);
-          toast.success(`Joined room "${message.data.roomName}"`);
-          break;
-
-        case 'roomUpdate':
-          if (currentRoom && message.data.roomId === currentRoom.id) {
+          case 'roomJoined':
             setCurrentRoom({
-              ...currentRoom,
+              id: message.data.roomId,
+              name: message.data.roomName,
+              isPublic: message.data.isPublic,
               players: message.data.players
             });
-            setAllPlayersReady(message.data.allPlayersReady);
-          }
-          break;
+            setIsHost(message.data.isHost);
+            setIsReady(false);
+            toast.success(`Joined room "${message.data.roomName}"`);
+            break;
 
-        case 'playerLeft':
-          if (currentRoom) {
-            toast.info(`${message.data.playerName} left the room`);
-          }
-          break;
+          case 'roomUpdate':
+            if (currentRoom && message.data.roomId === currentRoom.id) {
+              setCurrentRoom({
+                ...currentRoom,
+                players: message.data.players
+              });
+              setAllPlayersReady(message.data.allPlayersReady);
+            }
+            break;
 
-        case 'playerJoined':
-          if (currentRoom) {
-            toast.info(`${message.data.playerName} joined the room`);
-          }
-          break;
+          case 'playerLeft':
+            if (currentRoom) {
+              toast.info(`${message.data.playerName} left the room`);
+            }
+            break;
 
-        case 'roomError':
-          toast.error(message.data.message);
-          break;
+          case 'playerJoined':
+            if (currentRoom) {
+              toast.info(`${message.data.playerName} joined the room`);
+            }
+            break;
 
-        case 'gameStarting':
-          toast.success('Game starting in 3 seconds!');
-          setTimeout(() => {
-            setIsPlaying(true);
-            setGameOver(false);
-          }, 3000);
-          break;
+          case 'roomError':
+            toast.error(message.data.message);
+            break;
+
+          case 'gameStarting':
+            toast.success('Game starting in 3 seconds!');
+            setTimeout(() => {
+              setIsPlaying(true);
+              setGameOver(false);
+            }, 3000);
+            break;
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error, event.data);
       }
     };
 
@@ -324,18 +322,25 @@ export const useGameWebSocket = () => {
       return;
     }
     
-    console.log('Sending createRoom request:', { roomName, isPublic, maxPlayers, playerId });
+    if (wsRef.current.readyState !== WebSocket.OPEN) {
+      console.error('WebSocket not open, current state:', wsRef.current.readyState);
+      toast.error('Connection to server not ready. Please try again in a moment.');
+      return;
+    }
+    
+    const request = {
+      type: 'createRoom',
+      playerId,
+      roomName,
+      isPublic,
+      maxPlayers
+    };
+    
+    console.log('Sending createRoom request:', request);
     
     try {
-      wsRef.current.send(JSON.stringify({
-        type: 'createRoom',
-        playerId,
-        roomName,
-        isPublic,
-        maxPlayers
-      }));
-      
-      console.log('WebSocket state after sending:', wsRef.current.readyState);
+      wsRef.current.send(JSON.stringify(request));
+      console.log('Create room request sent successfully');
     } catch (error) {
       console.error('Error sending createRoom request:', error);
       toast.error('Failed to create room. Please try again.');
@@ -431,6 +436,10 @@ export const useGameWebSocket = () => {
       return () => clearInterval(interval);
     }
   }, [playerId, currentRoom, isPlaying]);
+
+  useEffect(() => {
+    console.log('currentRoom state changed:', currentRoom);
+  }, [currentRoom]);
 
   return {
     playerId,

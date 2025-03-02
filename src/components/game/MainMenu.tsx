@@ -72,17 +72,20 @@ const MainMenu: React.FC<MainMenuProps> = ({
 
   useEffect(() => {
     if (currentRoom) {
-      console.log('Current room updated, transitioning from view:', view);
-      if (view === 'create' || view === 'rooms') {
-        console.log('Room successfully created/joined, currentRoom:', currentRoom);
-      }
+      console.log('MainMenu: Current room updated:', currentRoom);
     }
-  }, [currentRoom, view]);
+  }, [currentRoom]);
 
   useEffect(() => {
     if (!currentRoom && view !== 'main') {
-      console.log('No current room, resetting view to main');
+      console.log('MainMenu: No current room, resetting view to main');
       setView('main');
+    }
+  }, [currentRoom]);
+
+  useEffect(() => {
+    if (currentRoom) {
+      console.log('MainMenu: Room active, showing room lobby UI');
     }
   }, [currentRoom]);
 
@@ -96,7 +99,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
 
     try {
       onCreateRoom(roomName, isPublic, maxPlayers);
-      console.log('Room creation request sent, waiting for response...');
+      console.log('MainMenu: Room creation request sent');
     } catch (error) {
       console.error('Error in handleCreateRoom:', error);
       toast.error('Failed to create room. Please try again.');
@@ -111,7 +114,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
   };
 
   if (currentRoom) {
-    console.log('Showing room lobby for room:', currentRoom);
+    console.log('MainMenu: Showing room lobby for room:', currentRoom.id);
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
         <div className="bg-black/40 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-6 max-w-md w-full">
