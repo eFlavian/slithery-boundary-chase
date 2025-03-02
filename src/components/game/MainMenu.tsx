@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import StartScreen from './StartScreen';
@@ -114,6 +113,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
           setPlayerName={setPlayerName}
           onCreateRoom={onCreateRoom}
           onBack={goToMainMenu}
+          currentRoom={currentRoom}
         />
       </div>
     );
@@ -139,8 +139,8 @@ const MainMenu: React.FC<MainMenuProps> = ({
       <StartScreen
         playerName={playerName}
         setPlayerName={setPlayerName}
-        onSinglePlayer={handleStartGame}
-        onCreateRoom={goToCreateRoom}
+        handleStartGame={handleStartGame}
+        onCreateRoom={onCreateRoom}
         onJoinRoom={goToJoinRoom}
       />
     </div>

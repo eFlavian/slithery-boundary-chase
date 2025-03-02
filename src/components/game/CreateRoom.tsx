@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -7,9 +6,11 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type CreateRoomProps = {
-  onCreateRoom: (roomName: string, isPublic: boolean, maxPlayers: number) => void;
+  playerName: string;
+  setPlayerName: (name: string) => void;
+  onCreateRoom: (roomName: string, isPublic: boolean, maxPlayers: number) => boolean;
   onBack: () => void;
-  currentRoom: {
+  currentRoom?: {
     id: string;
     name: string;
     isPublic: boolean;
@@ -17,7 +18,13 @@ type CreateRoomProps = {
   } | null;
 };
 
-const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRoom }) => {
+const CreateRoom: React.FC<CreateRoomProps> = ({ 
+  playerName,
+  setPlayerName,
+  onCreateRoom, 
+  onBack, 
+  currentRoom 
+}) => {
   const [roomName, setRoomName] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
@@ -25,18 +32,15 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
   const [previousRoomId, setPreviousRoomId] = useState<string | null>(null);
   const [timeoutId, setTimeoutId] = useState<number | null>(null);
 
-  // If room creation was successful, this effect will detect it
   useEffect(() => {
     if (currentRoom) {
       console.log('CreateRoom: Room detected:', currentRoom);
       
-      // Check if the room is new (not one we've already detected)
       if (previousRoomId !== currentRoom.id) {
         console.log('CreateRoom: New room detected, previousId:', previousRoomId, 'newId:', currentRoom.id);
         setPreviousRoomId(currentRoom.id);
         setIsSubmitting(false);
         
-        // Clear any pending timeout
         if (timeoutId) {
           clearTimeout(timeoutId);
           setTimeoutId(null);
@@ -45,7 +49,6 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
     }
   }, [currentRoom, previousRoomId, timeoutId]);
 
-  // Clean up timeout on unmount
   useEffect(() => {
     return () => {
       if (timeoutId) {
@@ -62,16 +65,20 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRo
       return;
     }
     
-    // If already submitting, prevent multiple submissions
     if (isSubmitting) return;
     
     setIsSubmitting(true);
     console.log('CreateRoom: Creating room:', roomName, isPublic, maxPlayers);
     
     try {
-      onCreateRoom(roomName.trim(), isPublic, maxPlayers);
+      const success = onCreateRoom(roomName.trim(), isPublic, maxPlayers);
       
-      // Set a timeout to reset the submitting state if no response after 10 seconds
+      if (!success) {
+        toast.error('Failed to create room. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+      
       const id = window.setTimeout(() => {
         console.log('Room creation timed out');
         setIsSubmitting(false);

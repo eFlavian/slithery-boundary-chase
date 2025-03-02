@@ -664,7 +664,8 @@ export const useGameWebSocket = () => {
     joinRoom,
     leaveRoom,
     toggleReady,
-    startRoomGame
+    startRoomGame,
+    requestRoomUpdate
   };
 };
 
