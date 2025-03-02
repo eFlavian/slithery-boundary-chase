@@ -56,6 +56,7 @@ export const useGameWebSocket = () => {
   const lastSocketMessageRef = useRef<number>(Date.now());
   const pendingRoomCreationRef = useRef<boolean>(false);
   const roomUpdateTimerRef = useRef<number>();
+  const joinLinkAttemptRef = useRef<string | null>(null);
 
   const connectToServer = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -90,6 +91,12 @@ export const useGameWebSocket = () => {
       
       if (currentRoom && playerId) {
         requestRoomUpdate();
+      }
+      
+      if (joinLinkAttemptRef.current && playerId) {
+        console.log('Attempting to join room from link:', joinLinkAttemptRef.current);
+        joinRoom(joinLinkAttemptRef.current);
+        joinLinkAttemptRef.current = null;
       }
     };
 
@@ -259,6 +266,7 @@ export const useGameWebSocket = () => {
                 : message.data.roomId.toUpperCase();
                 
               if (currentRoomIdNormalized === updateRoomIdNormalized) {
+                console.log('Room update received, updating players:', message.data.players);
                 setCurrentRoom({
                   ...currentRoom,
                   players: message.data.players
@@ -375,17 +383,24 @@ export const useGameWebSocket = () => {
     
     roomUpdateTimerRef.current = window.setInterval(() => {
       requestRoomUpdate();
-    }, 3000);
+    }, 1000);
   };
 
   const requestRoomUpdate = () => {
     if (!wsRef.current || !playerId || !currentRoom) return;
     
-    wsRef.current.send(JSON.stringify({
-      type: 'getRoomUpdate',
-      playerId,
-      roomId: currentRoom.id
-    }));
+    try {
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        console.log('Requesting room update for room:', currentRoom.id);
+        wsRef.current.send(JSON.stringify({
+          type: 'getRoomUpdate',
+          playerId,
+          roomId: currentRoom.id.startsWith('room_') ? currentRoom.id : `room_${currentRoom.id.toLowerCase()}`
+        }));
+      }
+    } catch (error) {
+      console.error('Error requesting room update:', error);
+    }
   };
 
   const sendDirection = (direction: Direction) => {
@@ -476,7 +491,11 @@ export const useGameWebSocket = () => {
   };
 
   const joinRoom = (roomId: string) => {
-    if (!wsRef.current || !playerId) return;
+    if (!wsRef.current || !playerId) {
+      console.log('Cannot join room yet, storing room ID for later:', roomId);
+      joinLinkAttemptRef.current = roomId;
+      return;
+    }
     
     const formattedRoomId = roomId.startsWith('room_') 
       ? roomId 
@@ -484,11 +503,16 @@ export const useGameWebSocket = () => {
       
     console.log(`Joining room with ID: ${formattedRoomId}`);
     
-    wsRef.current.send(JSON.stringify({
-      type: 'joinRoom',
-      playerId,
-      roomId: formattedRoomId
-    }));
+    try {
+      wsRef.current.send(JSON.stringify({
+        type: 'joinRoom',
+        playerId,
+        roomId: formattedRoomId
+      }));
+    } catch (error) {
+      console.error('Error joining room:', error);
+      toast.error('Failed to join room. Please try again.');
+    }
   };
 
   const leaveRoom = () => {
@@ -498,10 +522,14 @@ export const useGameWebSocket = () => {
       clearInterval(roomUpdateTimerRef.current);
     }
     
+    const formattedRoomId = currentRoom.id.startsWith('room_') 
+      ? currentRoom.id 
+      : `room_${currentRoom.id.toLowerCase()}`;
+    
     wsRef.current.send(JSON.stringify({
       type: 'leaveRoom',
       playerId,
-      roomId: currentRoom.id
+      roomId: formattedRoomId
     }));
     
     setCurrentRoom(null);
@@ -514,25 +542,40 @@ export const useGameWebSocket = () => {
     
     const newReadyState = !isReady;
     
-    wsRef.current.send(JSON.stringify({
-      type: 'toggleReady',
-      playerId,
-      roomId: currentRoom.id,
-      isReady: newReadyState
-    }));
+    const formattedRoomId = currentRoom.id.startsWith('room_') 
+      ? currentRoom.id 
+      : `room_${currentRoom.id.toLowerCase()}`;
     
-    setIsReady(newReadyState);
-    
-    requestRoomUpdate();
+    try {
+      wsRef.current.send(JSON.stringify({
+        type: 'toggleReady',
+        playerId,
+        roomId: formattedRoomId,
+        isReady: newReadyState
+      }));
+      
+      setIsReady(newReadyState);
+      
+      setTimeout(() => {
+        requestRoomUpdate();
+      }, 100);
+    } catch (error) {
+      console.error('Error toggling ready state:', error);
+      toast.error('Failed to update ready status. Please try again.');
+    }
   };
 
   const startRoomGame = () => {
     if (!wsRef.current || !playerId || !currentRoom || !isHost || !allPlayersReady) return;
     
+    const formattedRoomId = currentRoom.id.startsWith('room_') 
+      ? currentRoom.id 
+      : `room_${currentRoom.id.toLowerCase()}`;
+    
     wsRef.current.send(JSON.stringify({
       type: 'startGame',
       playerId,
-      roomId: currentRoom.id
+      roomId: formattedRoomId
     }));
   };
 
@@ -570,12 +613,34 @@ export const useGameWebSocket = () => {
   }, []);
 
   useEffect(() => {
+    const checkForRoomLink = () => {
+      const queryParams = new URLSearchParams(window.location.search);
+      const roomParam = queryParams.get('room');
+      
+      if (roomParam) {
+        console.log('Found room parameter in URL:', roomParam);
+        joinLinkAttemptRef.current = roomParam;
+        
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    };
+    
+    checkForRoomLink();
+  }, []);
+
+  useEffect(() => {
     if (playerId && !currentRoom && !isPlaying) {
       const interval = setInterval(() => {
         requestPublicRooms();
       }, 5000);
       
       requestPublicRooms();
+      
+      if (joinLinkAttemptRef.current) {
+        console.log('PlayerId is available, attempting to join room from link');
+        joinRoom(joinLinkAttemptRef.current);
+        joinLinkAttemptRef.current = null;
+      }
       
       return () => clearInterval(interval);
     }
@@ -614,7 +679,8 @@ export const useGameWebSocket = () => {
     joinRoom,
     leaveRoom,
     toggleReady,
-    startRoomGame
+    startRoomGame,
+    requestRoomUpdate
   };
 };
 

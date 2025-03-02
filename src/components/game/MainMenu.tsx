@@ -41,6 +41,7 @@ type MainMenuProps = {
   onLeaveRoom: () => void;
   onToggleReady: () => void;
   onStartGame: () => void;
+  onRefreshRoom?: () => void;  // New prop for manual refresh
 };
 
 const MainMenu: React.FC<MainMenuProps> = ({
@@ -57,6 +58,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
   onLeaveRoom,
   onToggleReady,
   onStartGame,
+  onRefreshRoom,
 }) => {
   const [view, setView] = useState<'main' | 'rooms' | 'create'>('main');
   const [lastViewChangeTime, setLastViewChangeTime] = useState(Date.now());
@@ -94,7 +96,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
     setLastViewChangeTime(Date.now());
   }, [view]);
 
-  useEffect(() => {
+  const checkRoomInUrl = () => {
     const queryParams = new URLSearchParams(window.location.search);
     const roomParam = queryParams.get('room');
     
@@ -103,7 +105,14 @@ const MainMenu: React.FC<MainMenuProps> = ({
       onJoinRoom(roomParam);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [playerName, onJoinRoom]);
+  };
+
+  // Check for room in URL on load and when playerName changes
+  useEffect(() => {
+    if (playerName) {
+      checkRoomInUrl();
+    }
+  }, [playerName]);
 
   const handleCreateRoom = (roomName: string, isPublic: boolean, maxPlayers: number) => {
     console.log('MainMenu handling room creation:', roomName, isPublic, maxPlayers);
@@ -139,6 +148,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             onToggleReady={onToggleReady}
             onStartGame={onStartGame}
             onLeaveRoom={onLeaveRoom}
+            onRefreshRoom={onRefreshRoom}
           />
         </div>
       </div>

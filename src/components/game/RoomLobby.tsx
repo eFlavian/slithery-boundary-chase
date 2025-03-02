@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Share2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Player = {
@@ -23,6 +23,7 @@ type RoomLobbyProps = {
   onToggleReady: () => void;
   onStartGame: () => void;
   onLeaveRoom: () => void;
+  onRefreshRoom?: () => void;  // New prop for manual refresh
 };
 
 const RoomLobby: React.FC<RoomLobbyProps> = ({
@@ -36,6 +37,7 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
   onToggleReady,
   onStartGame,
   onLeaveRoom,
+  onRefreshRoom,
 }) => {
   // Generate a shareable link with the room ID
   const shareableLink = `${window.location.origin}?room=${roomId}`;
@@ -88,6 +90,21 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
             <span>Share Link</span>
           </Button>
         </div>
+      </div>
+      
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="text-sm font-medium text-white/80">Players</h4>
+        {onRefreshRoom && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex items-center gap-1 text-white/70 hover:text-white"
+            onClick={onRefreshRoom}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span className="text-xs">Refresh</span>
+          </Button>
+        )}
       </div>
       
       <div className="space-y-2 max-h-40 overflow-y-auto mb-6">
