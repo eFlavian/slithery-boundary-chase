@@ -45,7 +45,6 @@ export const useGameWebSocket = () => {
   const countdownIntervalRef = useRef<number>();
 
   const connectToServer = () => {
-    // Fix for mobile: Use the current hostname instead of hardcoded localhost
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
     const wsUrl = `${protocol}//${wsHost}`;
@@ -100,7 +99,6 @@ export const useGameWebSocket = () => {
           break;
           
         case 'minimapUpdate':
-          // Clear any existing timers if this is a reset
           if (message.data.reset) {
             if (minimapTimerRef.current) {
               clearTimeout(minimapTimerRef.current);
@@ -116,10 +114,8 @@ export const useGameWebSocket = () => {
           setIsMinimapVisible(message.data.visible);
           setMinimapTimeLeft(message.data.duration);
           
-          // Start new countdown
           let timeLeft = message.data.duration;
           
-          // Clear existing countdown interval if it exists
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
@@ -128,9 +124,7 @@ export const useGameWebSocket = () => {
             timeLeft -= 1;
             setMinimapTimeLeft(timeLeft);
             
-            // Start blinking when 3 seconds are left
             if (timeLeft === 3) {
-              // Clear any existing blink interval
               if (minimapBlinkRef.current) {
                 clearInterval(minimapBlinkRef.current);
               }
@@ -149,7 +143,6 @@ export const useGameWebSocket = () => {
             }
           }, 1000);
           
-          // Set timeout to stop the minimap visibility
           minimapTimerRef.current = window.setTimeout(() => {
             setIsMinimapVisible(false);
             if (minimapBlinkRef.current) {
@@ -199,7 +192,6 @@ export const useGameWebSocket = () => {
 
         case 'playerReady':
           if (currentRoom && message.data.roomId === currentRoom.id) {
-            // Update the ready players list
             setCurrentRoom(prev => {
               if (!prev) return null;
             
@@ -223,7 +215,7 @@ export const useGameWebSocket = () => {
           toast.success('All players are ready! Game starting...');
           setIsPlaying(true);
           setGameOver(false);
-          setView('freeRide'); // Switch to the game view
+          setView('freeRide');
           break;
 
         case 'error':
@@ -236,7 +228,6 @@ export const useGameWebSocket = () => {
       console.log('Disconnected from server');
       toast.error('Disconnected from game server');
       
-      // Attempt to reconnect with exponential backoff
       if (reconnectAttempts < 5) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
         console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
@@ -307,6 +298,8 @@ export const useGameWebSocket = () => {
       return;
     }
     
+    console.log(`Creating room: ${roomName}, private: ${isPrivate}, maxPlayers: ${maxPlayers}`);
+    
     wsRef.current.send(JSON.stringify({
       type: 'createRoom',
       playerId,
@@ -314,12 +307,13 @@ export const useGameWebSocket = () => {
       isPrivate,
       maxPlayers
     }));
-    
-    // Handle room creation response in the onmessage handler
   };
 
   const joinRoom = (roomId: string, code?: string) => {
-    if (!wsRef.current || !playerId) return;
+    if (!wsRef.current || !playerId) {
+      toast.error("Connection to server lost. Please refresh the page.");
+      return;
+    }
     
     wsRef.current.send(JSON.stringify({
       type: 'joinRoom',
@@ -423,7 +417,6 @@ export const useGameWebSocket = () => {
         break;
           
       case 'minimapUpdate':
-        // Clear any existing timers if this is a reset
         if (message.data.reset) {
           if (minimapTimerRef.current) {
             clearTimeout(minimapTimerRef.current);
@@ -439,10 +432,8 @@ export const useGameWebSocket = () => {
         setIsMinimapVisible(message.data.visible);
         setMinimapTimeLeft(message.data.duration);
           
-        // Start new countdown
         let timeLeft = message.data.duration;
           
-        // Clear existing countdown interval if it exists
         if (countdownIntervalRef.current) {
           clearInterval(countdownIntervalRef.current);
         }
@@ -451,9 +442,7 @@ export const useGameWebSocket = () => {
           timeLeft -= 1;
           setMinimapTimeLeft(timeLeft);
             
-          // Start blinking when 3 seconds are left
           if (timeLeft === 3) {
-            // Clear any existing blink interval
             if (minimapBlinkRef.current) {
               clearInterval(minimapBlinkRef.current);
             }
@@ -472,7 +461,6 @@ export const useGameWebSocket = () => {
           }
         }, 1000);
           
-        // Set timeout to stop the minimap visibility
         minimapTimerRef.current = window.setTimeout(() => {
           setIsMinimapVisible(false);
           if (minimapBlinkRef.current) {
@@ -522,7 +510,6 @@ export const useGameWebSocket = () => {
 
       case 'playerReady':
         if (currentRoom && message.data.roomId === currentRoom.id) {
-          // Update the ready players list
           setCurrentRoom(prev => {
             if (!prev) return null;
             
@@ -546,7 +533,7 @@ export const useGameWebSocket = () => {
         toast.success('All players are ready! Game starting...');
         setIsPlaying(true);
         setGameOver(false);
-        setView('freeRide'); // Switch to the game view
+        setView('freeRide');
         break;
 
       case 'error':

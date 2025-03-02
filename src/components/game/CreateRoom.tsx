@@ -4,6 +4,7 @@ import { Crown, ArrowLeft, Lock, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { MAX_ROOM_NAME_LENGTH, MIN_PLAYERS, MAX_PLAYERS, DEFAULT_MAX_PLAYERS } from './gameConstants';
 
 type CreateRoomProps = {
   onBack: () => void;
@@ -13,7 +14,7 @@ type CreateRoomProps = {
 const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
   const [roomName, setRoomName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
-  const [maxPlayers, setMaxPlayers] = useState(8);
+  const [maxPlayers, setMaxPlayers] = useState(DEFAULT_MAX_PLAYERS);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const handleCreateRoom = () => {
@@ -22,7 +23,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
     setIsSubmitting(true);
     // Call the onCreateRoom function passed from the parent
     onCreateRoom(roomName.trim(), isPrivate, maxPlayers);
-    // The parent component (GameBoard) will handle the view change to the lobby
+    // The parent component will handle the view change to the lobby
   };
   
   return (
@@ -53,7 +54,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
               onChange={(e) => setRoomName(e.target.value)}
               className="bg-gray-900/60 border border-white/20 text-white"
               placeholder="My Snake Room"
-              maxLength={20}
+              maxLength={MAX_ROOM_NAME_LENGTH}
               disabled={isSubmitting}
             />
           </div>
@@ -65,8 +66,8 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onBack, onCreateRoom }) => {
             <input
               id="maxPlayers"
               type="range"
-              min="2"
-              max="16"
+              min={MIN_PLAYERS}
+              max={MAX_PLAYERS}
               value={maxPlayers}
               onChange={(e) => setMaxPlayers(parseInt(e.target.value))}
               className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
