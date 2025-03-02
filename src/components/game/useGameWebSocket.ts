@@ -27,7 +27,7 @@ type Player = {
 
 export const useGameWebSocket = () => {
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [playerName, setPlayerName] = useState<string>(''); // Added playerName state
+  const [playerName, setPlayerName] = useState<string>('');
   const [players, setPlayers] = useState<any[]>([]);
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [yellowDots, setYellowDots] = useState<Position[]>([]);
@@ -58,6 +58,7 @@ export const useGameWebSocket = () => {
   const pendingRoomCreationRef = useRef<boolean>(false);
   const roomUpdateTimerRef = useRef<number>();
   const joinLinkAttemptRef = useRef<string | null>(null);
+  const readyStateTimeoutRef = useRef<NodeJS.Timeout[]>([]);
 
   const connectToServer = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -260,37 +261,7 @@ export const useGameWebSocket = () => {
             break;
 
           case 'roomUpdate':
-            if (currentRoom) {
-              const currentRoomIdNormalized = currentRoom.id.toUpperCase();
-              const updateRoomIdNormalized = message.data.roomId.startsWith('room_')
-                ? message.data.roomId.substring(5).toUpperCase()
-                : message.data.roomId.toUpperCase();
-                
-              if (currentRoomIdNormalized === updateRoomIdNormalized) {
-                console.log('Room update received, updating players:', message.data.players);
-                
-                // Check if the current player's ready status has changed
-                if (playerId) {
-                  const playerInUpdate = message.data.players.find((p: Player) => p.id === playerId);
-                  if (playerInUpdate) {
-                    setIsReady(playerInUpdate.isReady);
-                  }
-                }
-                
-                setCurrentRoom(prevRoom => {
-                  if (!prevRoom) return null;
-                  return {
-                    ...prevRoom,
-                    players: [...message.data.players]
-                  };
-                });
-                
-                setAllPlayersReady(message.data.allPlayersReady);
-                
-                // Request another update to keep data fresh
-                setTimeout(() => requestRoomUpdate(), 200);
-              }
-            }
+            handleRoomUpdateMessage(message);
             break;
 
           case 'playerLeft':
@@ -299,6 +270,7 @@ export const useGameWebSocket = () => {
               requestRoomUpdate();
               setTimeout(() => requestRoomUpdate(), 200);
               setTimeout(() => requestRoomUpdate(), 500);
+              setTimeout(() => requestRoomUpdate(), 1000);
             }
             break;
 
@@ -403,13 +375,11 @@ export const useGameWebSocket = () => {
       clearInterval(roomUpdateTimerRef.current);
     }
     
-    // Immediate refresh
     requestRoomUpdate();
     
-    // Setting a faster interval for more responsive updates
     roomUpdateTimerRef.current = window.setInterval(() => {
       requestRoomUpdate();
-    }, 200); // Changed from 250ms to 200ms for more frequent updates
+    }, 200);
   };
 
   const requestRoomUpdate = () => {
@@ -488,7 +458,6 @@ export const useGameWebSocket = () => {
       return false;
     }
     
-    // Use player name as part of room name if roomName is empty
     const finalRoomName = roomName.trim() || `${playerName}'s room`;
     
     const request = {
@@ -575,6 +544,9 @@ export const useGameWebSocket = () => {
   const toggleReady = () => {
     if (!wsRef.current || !playerId || !currentRoom) return;
     
+    readyStateTimeoutRef.current.forEach(timeout => clearTimeout(timeout));
+    readyStateTimeoutRef.current = [];
+    
     const newReadyState = !isReady;
     
     const formattedRoomId = currentRoom.id.startsWith('room_') 
@@ -583,6 +555,9 @@ export const useGameWebSocket = () => {
     
     try {
       console.log(`Toggling ready state to: ${newReadyState}`);
+      
+      setIsReady(newReadyState);
+      
       wsRef.current.send(JSON.stringify({
         type: 'toggleReady',
         playerId,
@@ -590,18 +565,40 @@ export const useGameWebSocket = () => {
         isReady: newReadyState
       }));
       
-      // Temporarily update local state immediately for better UX
-      setIsReady(newReadyState);
-      
-      // Request multiple room updates to ensure state is synchronized
       requestRoomUpdate();
-      setTimeout(() => requestRoomUpdate(), 100);
-      setTimeout(() => requestRoomUpdate(), 300);
-      setTimeout(() => requestRoomUpdate(), 600);
-      setTimeout(() => requestRoomUpdate(), 1000);
+      
+      const timeouts = [
+        setTimeout(() => requestRoomUpdate(), 100),
+        setTimeout(() => requestRoomUpdate(), 300),
+        setTimeout(() => requestRoomUpdate(), 600),
+        setTimeout(() => requestRoomUpdate(), 1000),
+        setTimeout(() => requestRoomUpdate(), 2000),
+        setTimeout(() => requestRoomUpdate(), 3000)
+      ];
+      
+      readyStateTimeoutRef.current = timeouts;
+      
+      setCurrentRoom(prevRoom => {
+        if (!prevRoom) return null;
+        
+        const updatedPlayers = prevRoom.players.map(player => {
+          if (player.id === playerId) {
+            return { ...player, isReady: newReadyState };
+          }
+          return player;
+        });
+        
+        return {
+          ...prevRoom,
+          players: updatedPlayers
+        };
+      });
+      
     } catch (error) {
       console.error('Error toggling ready state:', error);
       toast.error('Failed to update ready status. Please try again.');
+      
+      setIsReady(!newReadyState);
     }
   };
 
@@ -628,10 +625,44 @@ export const useGameWebSocket = () => {
     }));
   };
 
+  const handleRoomUpdateMessage = (message: any) => {
+    if (currentRoom) {
+      const currentRoomIdNormalized = currentRoom.id.toUpperCase();
+      const updateRoomIdNormalized = message.data.roomId.startsWith('room_')
+        ? message.data.roomId.substring(5).toUpperCase()
+        : message.data.roomId.toUpperCase();
+        
+      if (currentRoomIdNormalized === updateRoomIdNormalized) {
+        console.log('Room update received, updating players:', message.data.players);
+        
+        if (playerId) {
+          const playerInUpdate = message.data.players.find((p: Player) => p.id === playerId);
+          if (playerInUpdate) {
+            console.log(`Server says my ready state is: ${playerInUpdate.isReady}, local state: ${isReady}`);
+            
+            if (playerInUpdate.isReady !== isReady) {
+              console.log(`Correcting local ready state to match server: ${playerInUpdate.isReady}`);
+              setIsReady(playerInUpdate.isReady);
+            }
+          }
+        }
+        
+        setCurrentRoom(prevRoom => {
+          if (!prevRoom) return null;
+          return {
+            ...prevRoom,
+            players: [...message.data.players]
+          };
+        });
+        
+        setAllPlayersReady(message.data.allPlayersReady);
+      }
+    }
+  };
+
   useEffect(() => {
     const cleanupFn = connectToServer();
     
-    // Load player name from localStorage if available
     const savedName = localStorage.getItem('playerName');
     if (savedName) {
       setPlayerName(savedName);
@@ -655,6 +686,8 @@ export const useGameWebSocket = () => {
       if (roomUpdateTimerRef.current) {
         clearInterval(roomUpdateTimerRef.current);
       }
+      
+      readyStateTimeoutRef.current.forEach(timeout => clearTimeout(timeout));
     };
   }, []);
 

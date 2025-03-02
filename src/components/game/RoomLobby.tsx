@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -55,16 +54,23 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
       onRefreshRoom();
       
       // Additional immediate refreshes to ensure data is up-to-date
-      setTimeout(() => onRefreshRoom(), 200);
-      setTimeout(() => onRefreshRoom(), 500);
-      setTimeout(() => onRefreshRoom(), 1000);
+      const initialTimeouts = [
+        setTimeout(() => onRefreshRoom(), 200),
+        setTimeout(() => onRefreshRoom(), 500),
+        setTimeout(() => onRefreshRoom(), 1000),
+        setTimeout(() => onRefreshRoom(), 2000),
+        setTimeout(() => onRefreshRoom(), 3000)
+      ];
       
       // Regular refresh interval - more frequent to catch updates
       const refreshInterval = setInterval(() => {
         onRefreshRoom();
-      }, 1000); // Refresh every 1 second (changed from 2 seconds)
+      }, 1000); // Refresh every 1 second
       
-      return () => clearInterval(refreshInterval);
+      return () => {
+        clearInterval(refreshInterval);
+        initialTimeouts.forEach(timeout => clearTimeout(timeout));
+      };
     }
   }, [onRefreshRoom]);
 
@@ -124,6 +130,7 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
               // Additional refreshes to ensure data is up-to-date
               setTimeout(() => onRefreshRoom(), 200);
               setTimeout(() => onRefreshRoom(), 500);
+              setTimeout(() => onRefreshRoom(), 1000);
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -161,17 +168,7 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
       
       <div className="flex gap-3">
         <Button 
-          onClick={() => {
-            onToggleReady();
-            // Trigger multiple refreshes after toggling ready to ensure UI updates
-            if (onRefreshRoom) {
-              onRefreshRoom(); // Immediate refresh
-              setTimeout(() => onRefreshRoom(), 100);
-              setTimeout(() => onRefreshRoom(), 300);
-              setTimeout(() => onRefreshRoom(), 600);
-              setTimeout(() => onRefreshRoom(), 1000);
-            }
-          }}
+          onClick={onToggleReady}
           className={isReady ? "bg-gray-600 hover:bg-gray-700" : "bg-green-600 hover:bg-green-700 flex-1"}
         >
           {isReady ? "Cancel Ready" : "Ready"}
