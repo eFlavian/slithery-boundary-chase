@@ -37,6 +37,7 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
   onStartGame,
   onLeaveRoom,
 }) => {
+  // Generate a shareable link with the room ID
   const shareableLink = `${window.location.origin}?room=${roomId}`;
 
   const copyToClipboard = (text: string, message: string) => {
@@ -71,9 +72,9 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
             variant="outline"
             size="sm"
             className="flex items-center gap-2"
-            onClick={() => copyToClipboard(roomId, "Room ID copied to clipboard!")}
+            onClick={() => copyToClipboard(roomId, "Room code copied to clipboard!")}
           >
-            <span className="truncate max-w-32">ID: {roomId}</span>
+            <span className="truncate max-w-32">Code: {roomId}</span>
             <Copy className="h-3.5 w-3.5" />
           </Button>
           

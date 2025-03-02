@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Play } from 'lucide-react';
 import RoomsList from './RoomsList';
@@ -62,13 +61,10 @@ const MainMenu: React.FC<MainMenuProps> = ({
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [lastViewChangeTime, setLastViewChangeTime] = useState(Date.now());
 
-  // Force reset view to main when navigating to a room
   useEffect(() => {
     if (currentRoom) {
       console.log('MainMenu: Current room detected, currentRoom:', currentRoom);
-      // Reset view back to main if we've just joined a room
       const now = Date.now();
-      // Only reset if it's been more than 200ms since the last view change to prevent flashing
       if (now - lastViewChangeTime > 200) {
         console.log('MainMenu: Resetting view to main because current room detected');
         setView('main');
@@ -76,12 +72,10 @@ const MainMenu: React.FC<MainMenuProps> = ({
     }
   }, [currentRoom, lastViewChangeTime]);
 
-  // For debugging - track room state changes
   useEffect(() => {
     console.log('MainMenu: Current room updated:', currentRoom);
   }, [currentRoom]);
 
-  // For debugging - track view state changes
   useEffect(() => {
     console.log('MainMenu: View changed to:', view);
     setLastViewChangeTime(Date.now());
@@ -92,6 +86,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
     const roomParam = queryParams.get('room');
     
     if (roomParam && playerName) {
+      console.log('MainMenu: Found room param in URL:', roomParam);
       onJoinRoom(roomParam);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -117,12 +112,19 @@ const MainMenu: React.FC<MainMenuProps> = ({
 
   const handleJoinWithCode = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!playerName.trim()) {
+      toast.error("Please enter your name before joining a room");
+      return;
+    }
+    
     if (roomCodeInput.trim()) {
+      console.log('MainMenu: Joining room with code:', roomCodeInput.trim());
       onJoinRoom(roomCodeInput.trim());
+    } else {
+      toast.error("Please enter a room code");
     }
   };
 
-  // Render the room lobby when currentRoom is not null
   if (currentRoom) {
     console.log('MainMenu: Showing room lobby for room:', currentRoom.id);
     return (
@@ -169,7 +171,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
               
               <div className="flex flex-col space-y-3 mt-6">
                 <button
-                  onClick={() => playerName.trim() ? setView('rooms') : null}
+                  onClick={() => playerName.trim() ? setView('rooms') : toast.error("Please enter your name")}
                   disabled={!playerName.trim()}
                   className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >

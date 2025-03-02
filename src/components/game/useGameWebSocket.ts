@@ -212,7 +212,7 @@ export const useGameWebSocket = () => {
             setIsHost(true);
             setIsReady(false);
             
-            toast.success(`Room "${message.data.roomName}" created`);
+            toast.success(`Room "${message.data.roomName}" created. Room code: ${message.data.roomId}`);
             break;
 
           case 'roomJoined':
