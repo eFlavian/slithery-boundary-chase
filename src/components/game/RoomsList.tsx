@@ -1,7 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRightCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRightCircle, Copy } from 'lucide-react';
+import { toast } from 'sonner';
 
 type Room = {
   id: string;
@@ -20,6 +21,23 @@ type RoomsListProps = {
 };
 
 const RoomsList: React.FC<RoomsListProps> = ({ rooms, onJoinRoom, onCreateRoom, onBack }) => {
+  const [manualRoomCode, setManualRoomCode] = useState('');
+  
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => toast.success("Room code copied to clipboard!"))
+      .catch(() => toast.error("Failed to copy"));
+  };
+
+  const handleManualJoin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (manualRoomCode.trim()) {
+      onJoinRoom(manualRoomCode.trim());
+    } else {
+      toast.error("Please enter a room code");
+    }
+  };
+
   return (
     <div className="space-y-4 w-full">
       <button 
@@ -40,6 +58,24 @@ const RoomsList: React.FC<RoomsListProps> = ({ rooms, onJoinRoom, onCreateRoom, 
         </Button>
       </div>
       
+      <form onSubmit={handleManualJoin} className="flex gap-2 mb-4">
+        <input
+          type="text"
+          value={manualRoomCode}
+          onChange={(e) => setManualRoomCode(e.target.value.toUpperCase())}
+          className="flex-1 px-4 py-2 bg-gray-900/60 border border-white/20 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono tracking-wider"
+          placeholder="Enter Room Code"
+          maxLength={10}
+        />
+        <Button
+          type="submit"
+          disabled={!manualRoomCode.trim()}
+          className="bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Join
+        </Button>
+      </form>
+      
       {rooms.length > 0 ? (
         <div className="space-y-2 max-h-60 overflow-y-auto">
           {rooms.map((room) => (
@@ -48,7 +84,17 @@ const RoomsList: React.FC<RoomsListProps> = ({ rooms, onJoinRoom, onCreateRoom, 
               className="flex justify-between items-center bg-black/30 border border-white/10 rounded-lg p-3"
             >
               <div>
-                <p className="font-medium text-white">{room.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-white">{room.name}</p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => copyToClipboard(room.id)}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
                 <p className="text-sm text-white/70">
                   {room.playerCount}/{room.maxPlayers} players • Host: {room.host}
                 </p>

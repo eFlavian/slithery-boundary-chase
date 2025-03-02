@@ -462,12 +462,10 @@ export const useGameWebSocket = () => {
   const joinRoom = (roomId: string) => {
     if (!wsRef.current || !playerId) return;
     
-    const formattedRoomId = roomId.toUpperCase();
-    
     wsRef.current.send(JSON.stringify({
       type: 'joinRoom',
       playerId,
-      roomId: formattedRoomId
+      roomId: roomId
     }));
   };
 
