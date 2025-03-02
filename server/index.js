@@ -1,3 +1,4 @@
+
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
@@ -151,22 +152,22 @@ function broadcastPublicRooms() {
 }
 
 function broadcastRoomUpdate(roomId) {
-  const room = rooms.get(roomId);
-  if (!room) return;
+  const roomToUpdate = rooms.get(roomId);
+  if (!roomToUpdate) return;
   
-  const allPlayersReady = room.players.length > 1 && 
-    room.players.every(player => player.isReady || player.isHost);
+  const allPlayersReady = roomToUpdate.players.length > 1 && 
+    roomToUpdate.players.every(player => player.isReady || player.isHost);
   
   const updateMsg = JSON.stringify({
     type: 'roomUpdate',
     data: {
-      roomId: room.id,
-      players: room.players,
+      roomId: roomToUpdate.id,
+      players: roomToUpdate.players,
       allPlayersReady
     }
   });
   
-  room.players.forEach(player => {
+  roomToUpdate.players.forEach(player => {
     const playerData = gameState.players.get(player.id);
     if (playerData && playerData.ws && playerData.ws.readyState === 1) {
       playerData.ws.send(updateMsg);
@@ -279,7 +280,7 @@ wss.on('connection', (ws) => {
           console.log(`Player ${data.playerId} creating room: ${data.roomName}`);
           
           const roomId = createUniqueRoomId();
-          const room = {
+          const newRoom = {
             id: roomId,
             name: data.roomName,
             isPublic: data.isPublic,
@@ -294,7 +295,7 @@ wss.on('connection', (ws) => {
             isGameStarted: false
           };
           
-          rooms.set(roomId, room);
+          rooms.set(roomId, newRoom);
           playerRooms.set(player.id, roomId);
           
           ws.send(JSON.stringify({
@@ -303,7 +304,7 @@ wss.on('connection', (ws) => {
               roomId: roomId,
               roomName: data.roomName,
               isPublic: data.isPublic,
-              players: room.players
+              players: newRoom.players
             }
           }));
           
@@ -388,12 +389,12 @@ wss.on('connection', (ws) => {
           const playerRoomId = playerRooms.get(player.id);
           if (!playerRoomId) return;
           
-          const room = rooms.get(playerRoomId);
-          if (!room) return;
+          const currentRoom = rooms.get(playerRoomId);
+          if (!currentRoom) return;
           
-          const playerIndex = room.players.findIndex(p => p.id === player.id);
+          const playerIndex = currentRoom.players.findIndex(p => p.id === player.id);
           if (playerIndex !== -1) {
-            room.players.splice(playerIndex, 1);
+            currentRoom.players.splice(playerIndex, 1);
           }
           
           playerRooms.delete(player.id);
@@ -403,13 +404,13 @@ wss.on('connection', (ws) => {
             data: { roomId: playerRoomId }
           }));
           
-          if (room.players.length === 0) {
+          if (currentRoom.players.length === 0) {
             rooms.delete(playerRoomId);
-          } else if (player.id === room.host.id) {
-            room.host = gameState.players.get(room.players[0].id);
-            room.players[0].isHost = true;
+          } else if (player.id === currentRoom.host.id) {
+            currentRoom.host = gameState.players.get(currentRoom.players[0].id);
+            currentRoom.players[0].isHost = true;
             
-            const newHostSocket = gameState.players.get(room.players[0].id)?.ws;
+            const newHostSocket = gameState.players.get(currentRoom.players[0].id)?.ws;
             if (newHostSocket && newHostSocket.readyState === 1) {
               newHostSocket.send(JSON.stringify({
                 type: 'hostTransferred',
@@ -418,7 +419,7 @@ wss.on('connection', (ws) => {
             }
           }
           
-          room.players.forEach(p => {
+          currentRoom.players.forEach(p => {
             const playerSocket = gameState.players.get(p.id)?.ws;
             if (playerSocket && playerSocket.readyState === 1) {
               playerSocket.send(JSON.stringify({
@@ -432,26 +433,26 @@ wss.on('connection', (ws) => {
             }
           });
           
-          if (room.players.length > 0) {
+          if (currentRoom.players.length > 0) {
             broadcastRoomUpdate(playerRoomId);
           }
           
-          if (room.isPublic) {
+          if (currentRoom.isPublic) {
             broadcastPublicRooms();
           }
           break;
 
         case 'toggleReady':
-          const roomId = data.roomId;
-          const room = rooms.get(roomId);
-          if (!room) return;
+          const readyRoomId = data.roomId;
+          const readyRoom = rooms.get(readyRoomId);
+          if (!readyRoom) return;
           
-          const playerInRoom = room.players.find(p => p.id === player.id);
+          const playerInRoom = readyRoom.players.find(p => p.id === player.id);
           if (!playerInRoom) return;
           
           playerInRoom.isReady = data.isReady;
           
-          broadcastRoomUpdate(roomId);
+          broadcastRoomUpdate(readyRoomId);
           break;
 
         case 'startGame':
@@ -620,20 +621,20 @@ wss.on('connection', (ws) => {
     
     const roomId = playerRooms.get(playerId);
     if (roomId) {
-      const room = rooms.get(roomId);
-      if (room) {
-        const playerIndex = room.players.findIndex(p => p.id === playerId);
+      const roomToLeave = rooms.get(roomId);
+      if (roomToLeave) {
+        const playerIndex = roomToLeave.players.findIndex(p => p.id === playerId);
         if (playerIndex !== -1) {
-          room.players.splice(playerIndex, 1);
+          roomToLeave.players.splice(playerIndex, 1);
         }
         
-        if (room.players.length === 0) {
+        if (roomToLeave.players.length === 0) {
           rooms.delete(roomId);
-        } else if (player.id === room.host.id) {
-          room.host = gameState.players.get(room.players[0].id);
-          room.players[0].isHost = true;
+        } else if (player.id === roomToLeave.host.id) {
+          roomToLeave.host = gameState.players.get(roomToLeave.players[0].id);
+          roomToLeave.players[0].isHost = true;
           
-          const newHostSocket = gameState.players.get(room.players[0].id)?.ws;
+          const newHostSocket = gameState.players.get(roomToLeave.players[0].id)?.ws;
           if (newHostSocket && newHostSocket.readyState === 1) {
             newHostSocket.send(JSON.stringify({
               type: 'hostTransferred',
@@ -642,7 +643,7 @@ wss.on('connection', (ws) => {
           }
         }
         
-        room.players.forEach(p => {
+        roomToLeave.players.forEach(p => {
           const playerSocket = gameState.players.get(p.id)?.ws;
           if (playerSocket && playerSocket.readyState === 1) {
             playerSocket.send(JSON.stringify({
@@ -656,11 +657,11 @@ wss.on('connection', (ws) => {
           }
         });
         
-        if (room.players.length > 0) {
+        if (roomToLeave.players.length > 0) {
           broadcastRoomUpdate(roomId);
         }
         
-        if (room.isPublic) {
+        if (roomToLeave.isPublic) {
           broadcastPublicRooms();
         }
       }
