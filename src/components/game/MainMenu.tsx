@@ -71,7 +71,17 @@ const MainMenu: React.FC<MainMenuProps> = ({
   }, [playerName, onJoinRoom]);
 
   useEffect(() => {
+    if (currentRoom) {
+      console.log('Current room updated, transitioning from view:', view);
+      if (view === 'create' || view === 'rooms') {
+        console.log('Room successfully created/joined, currentRoom:', currentRoom);
+      }
+    }
+  }, [currentRoom, view]);
+
+  useEffect(() => {
     if (!currentRoom && view !== 'main') {
+      console.log('No current room, resetting view to main');
       setView('main');
     }
   }, [currentRoom]);
@@ -86,6 +96,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
 
     try {
       onCreateRoom(roomName, isPublic, maxPlayers);
+      console.log('Room creation request sent, waiting for response...');
     } catch (error) {
       console.error('Error in handleCreateRoom:', error);
       toast.error('Failed to create room. Please try again.');
@@ -202,6 +213,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
           <CreateRoom
             onCreateRoom={handleCreateRoom}
             onBack={() => setView('rooms')}
+            currentRoom={currentRoom}
           />
         )}
       </div>

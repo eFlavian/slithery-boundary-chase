@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -9,13 +9,28 @@ import { toast } from 'sonner';
 type CreateRoomProps = {
   onCreateRoom: (roomName: string, isPublic: boolean, maxPlayers: number) => void;
   onBack: () => void;
+  currentRoom: {
+    id: string;
+    name: string;
+    isPublic: boolean;
+    players: any[];
+  } | null;
 };
 
-const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack }) => {
+const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRoom }) => {
   const [roomName, setRoomName] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // If room creation was successful, this effect will detect it
+  useEffect(() => {
+    if (currentRoom && isSubmitting) {
+      console.log('Room creation successful, currentRoom updated:', currentRoom);
+      setIsSubmitting(false);
+      // No need to do anything else, the parent component will handle the view change
+    }
+  }, [currentRoom, isSubmitting]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,8 +46,14 @@ const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack }) => {
       console.log('Creating room:', roomName, isPublic, maxPlayers);
       onCreateRoom(roomName.trim(), isPublic, maxPlayers);
       
-      // We don't reset form or change view here as the parent component will handle that
-      // based on the currentRoom state from useGameWebSocket
+      // Set a timeout to reset the submitting state if no response after 5 seconds
+      setTimeout(() => {
+        if (isSubmitting) {
+          console.log('Room creation timed out');
+          setIsSubmitting(false);
+          toast.error('Room creation timed out. Please try again.');
+        }
+      }, 5000);
     } catch (error) {
       console.error('Error in CreateRoom handleSubmit:', error);
       toast.error('Failed to create room. Please try again.');

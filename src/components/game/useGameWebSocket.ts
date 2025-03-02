@@ -182,6 +182,8 @@ export const useGameWebSocket = () => {
             return;
           }
           
+          console.log('Setting currentRoom with data:', message.data);
+          
           setCurrentRoom({
             id: message.data.roomId,
             name: message.data.roomName,
@@ -190,6 +192,14 @@ export const useGameWebSocket = () => {
           });
           setIsHost(true);
           setIsReady(false);
+          
+          console.log('CurrentRoom state updated, now:', {
+            id: message.data.roomId,
+            name: message.data.roomName,
+            isPublic: message.data.isPublic,
+            players: message.data.players
+          });
+          
           toast.success(`Room "${message.data.roomName}" created`);
           break;
 
@@ -324,6 +334,8 @@ export const useGameWebSocket = () => {
         isPublic,
         maxPlayers
       }));
+      
+      console.log('WebSocket state after sending:', wsRef.current.readyState);
     } catch (error) {
       console.error('Error sending createRoom request:', error);
       toast.error('Failed to create room. Please try again.');
