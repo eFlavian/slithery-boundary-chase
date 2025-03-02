@@ -383,7 +383,7 @@ export const useGameWebSocket = () => {
     
     roomUpdateTimerRef.current = window.setInterval(() => {
       requestRoomUpdate();
-    }, 1000);
+    }, 500);
   };
 
   const requestRoomUpdate = () => {
@@ -556,9 +556,11 @@ export const useGameWebSocket = () => {
       
       setIsReady(newReadyState);
       
+      requestRoomUpdate();
+      
       setTimeout(() => {
         requestRoomUpdate();
-      }, 100);
+      }, 300);
     } catch (error) {
       console.error('Error toggling ready state:', error);
       toast.error('Failed to update ready status. Please try again.');

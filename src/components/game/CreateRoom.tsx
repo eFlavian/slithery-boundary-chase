@@ -15,15 +15,23 @@ type CreateRoomProps = {
     isPublic: boolean;
     players: any[];
   } | null;
+  playerName: string; // Add playerName prop
 };
 
-const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRoom }) => {
+const CreateRoom: React.FC<CreateRoomProps> = ({ onCreateRoom, onBack, currentRoom, playerName }) => {
   const [roomName, setRoomName] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previousRoomId, setPreviousRoomId] = useState<string | null>(null);
   const [timeoutId, setTimeoutId] = useState<number | null>(null);
+
+  // Set default room name when component mounts or playerName changes
+  useEffect(() => {
+    if (!roomName && playerName) {
+      setRoomName(`${playerName}'s room`);
+    }
+  }, [playerName, roomName]);
 
   // If room creation was successful, this effect will detect it
   useEffect(() => {

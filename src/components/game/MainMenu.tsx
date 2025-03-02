@@ -219,6 +219,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             onCreateRoom={handleCreateRoom}
             onBack={() => setView('rooms')}
             currentRoom={currentRoom}
+            playerName={playerName} // Pass playerName to CreateRoom
           />
         )}
       </div>

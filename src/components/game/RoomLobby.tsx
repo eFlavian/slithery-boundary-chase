@@ -96,9 +96,9 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
         <h4 className="text-sm font-medium text-white/80">Players</h4>
         {onRefreshRoom && (
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            className="flex items-center gap-1 text-white/70 hover:text-white"
+            className="flex items-center gap-1"
             onClick={onRefreshRoom}
           >
             <RefreshCw className="h-3.5 w-3.5" />
