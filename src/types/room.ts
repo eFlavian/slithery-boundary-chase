@@ -17,3 +17,12 @@ export interface RoomPlayer {
   isReady: boolean;
   isCreator: boolean;
 }
+
+export interface CreateRoomRequest {
+  type: 'createRoom';
+  playerId: string;
+  playerName: string;
+  roomName: string;
+  visibility: RoomVisibility;
+  maxPlayers: number;
+}

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Globe, Lock, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface CreateRoomProps {
   onCreateRoom: (name: string, visibility: 'public' | 'private', maxPlayers: number) => void;
@@ -20,9 +21,12 @@ const CreateRoom: React.FC<CreateRoomProps> = ({
 
   const handleCreateRoom = () => {
     if (!roomName.trim()) {
+      toast.error("Please enter a room name");
       return;
     }
-    onCreateRoom(roomName, visibility, maxPlayers);
+    
+    console.log("Creating room with:", { roomName, visibility, maxPlayers });
+    onCreateRoom(roomName.trim(), visibility, maxPlayers);
   };
 
   return (
@@ -49,6 +53,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({
             placeholder="Enter room name"
             className="w-full px-3 py-2 border rounded-md bg-background"
             maxLength={20}
+            disabled={isCreating}
           />
         </div>
         
@@ -63,6 +68,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({
                   ? 'bg-primary text-primary-foreground border-primary' 
                   : 'bg-background text-foreground'
               }`}
+              disabled={isCreating}
             >
               <Globe size={16} />
               Public
@@ -75,6 +81,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({
                   ? 'bg-primary text-primary-foreground border-primary' 
                   : 'bg-background text-foreground'
               }`}
+              disabled={isCreating}
             >
               <Lock size={16} />
               Private
@@ -92,6 +99,7 @@ const CreateRoom: React.FC<CreateRoomProps> = ({
               value={maxPlayers}
               onChange={(e) => setMaxPlayers(parseInt(e.target.value))}
               className="flex-1"
+              disabled={isCreating}
             />
             <span className="w-8 text-center">{maxPlayers}</span>
           </div>

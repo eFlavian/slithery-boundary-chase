@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Room, RoomPlayer } from '@/types/room';
+import { Room, RoomPlayer, CreateRoomRequest } from '@/types/room';
 
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type Position = {
@@ -33,8 +33,9 @@ export const useGameWebSocket = () => {
   const minimapBlinkRef = useRef<number>();
   const reconnectTimerRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
+  const isConnected = useRef<boolean>(false);
 
-  const connectToServer = () => {
+  const connectToServer = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
     const wsUrl = `${protocol}//${wsHost}`;
@@ -51,6 +52,16 @@ export const useGameWebSocket = () => {
       console.log('Connected to server');
       toast.success('Connected to game server');
       setReconnectAttempts(0);
+      isConnected.current = true;
+      
+      // If we have a player name, re-authenticate after reconnection
+      if (playerName) {
+        console.log("Re-authenticating as", playerName);
+        ws.send(JSON.stringify({
+          type: 'authenticate',
+          playerName
+        }));
+      }
     };
 
     ws.onmessage = (event) => {
@@ -146,29 +157,34 @@ export const useGameWebSocket = () => {
           break;
 
         case 'roomsList':
+          console.log("Received rooms list:", message.data.rooms);
           setRooms(message.data.rooms);
           break;
 
         case 'roomCreated':
+          console.log("Room created:", message.data.room);
           setIsCreatingRoom(false);
           setCurrentRoom(message.data.room);
           toast.success(`Room "${message.data.room.name}" created!`);
           break;
 
         case 'roomJoined':
+          console.log("Joined room:", message.data.room);
           setIsJoiningRoom(false);
           setCurrentRoom(message.data.room);
           toast.success(`Joined room "${message.data.room.name}"`);
           break;
 
         case 'roomUpdated':
+          console.log("Room updated:", message.data.room);
           setCurrentRoom(message.data.room);
           if (message.data.room.players.every((player: RoomPlayer) => player.isReady)) {
-            toast.info('All players are ready! Starting game...');
+            toast.info('All players are ready! Starting game soon...');
           }
           break;
 
         case 'roomError':
+          console.error("Room error:", message.data.message);
           setIsCreatingRoom(false);
           setIsJoiningRoom(false);
           toast.error(message.data.message);
@@ -177,6 +193,7 @@ export const useGameWebSocket = () => {
         case 'gameStarted':
           setIsPlaying(true);
           setGameOver(false);
+          setCurrentRoom(null); // Clear current room after game starts
           toast.success('Game started!');
           break;
       }
@@ -185,6 +202,7 @@ export const useGameWebSocket = () => {
     ws.onclose = () => {
       console.log('Disconnected from server');
       toast.error('Disconnected from game server');
+      isConnected.current = false;
       
       if (reconnectAttempts < 5) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
@@ -206,7 +224,7 @@ export const useGameWebSocket = () => {
     };
 
     wsRef.current = ws;
-  };
+  }, [playerName, reconnectAttempts]);
 
   const sendDirection = (direction: Direction) => {
     if (!wsRef.current || !playerId) return;
@@ -250,18 +268,26 @@ export const useGameWebSocket = () => {
     setIsPlaying(true);
   };
 
-  const getRoomsList = () => {
-    if (!wsRef.current || !playerId) return;
+  const getRoomsList = useCallback(() => {
+    if (!wsRef.current || !isConnected.current) {
+      console.warn("Cannot get rooms list: not connected");
+      return;
+    }
 
+    console.log("Requesting rooms list");
     wsRef.current.send(JSON.stringify({
-      type: 'getRooms',
-      playerId
+      type: 'getRooms'
     }));
-  };
+  }, []);
 
-  const createRoom = (name: string, visibility: 'public' | 'private', maxPlayers: number) => {
+  const createRoom = useCallback((name: string, visibility: 'public' | 'private', maxPlayers: number) => {
     if (!wsRef.current || !playerId || !playerName) {
-      toast.error('Please enter your name first');
+      toast.error('Connection not established or player not ready');
+      return;
+    }
+
+    if (!isConnected.current) {
+      toast.error('Not connected to server');
       return;
     }
 
@@ -269,35 +295,44 @@ export const useGameWebSocket = () => {
     
     console.log('Creating room:', { name, visibility, maxPlayers, playerId, playerName });
     
-    wsRef.current.send(JSON.stringify({
+    const createRoomRequest: CreateRoomRequest = {
       type: 'createRoom',
       playerId,
       playerName,
       roomName: name,
       visibility,
       maxPlayers
-    }));
-  };
+    };
+    
+    wsRef.current.send(JSON.stringify(createRoomRequest));
+  }, [playerId, playerName]);
 
-  const joinRoom = (roomId: string) => {
+  const joinRoom = useCallback((roomId: string) => {
     if (!wsRef.current || !playerId || !playerName) {
-      toast.error('Please enter your name first');
+      toast.error('Connection not established or player not ready');
+      return;
+    }
+
+    if (!isConnected.current) {
+      toast.error('Not connected to server');
       return;
     }
 
     setIsJoiningRoom(true);
     
+    console.log("Joining room:", roomId);
     wsRef.current.send(JSON.stringify({
       type: 'joinRoom',
       playerId,
       playerName,
       roomId
     }));
-  };
+  }, [playerId, playerName]);
 
-  const leaveRoom = () => {
+  const leaveRoom = useCallback(() => {
     if (!wsRef.current || !playerId || !currentRoom) return;
     
+    console.log("Leaving room:", currentRoom.id);
     wsRef.current.send(JSON.stringify({
       type: 'leaveRoom',
       playerId,
@@ -305,18 +340,19 @@ export const useGameWebSocket = () => {
     }));
     
     setCurrentRoom(null);
-  };
+  }, [playerId, currentRoom]);
 
-  const setPlayerReady = (isReady: boolean) => {
+  const setPlayerReady = useCallback((isReady: boolean) => {
     if (!wsRef.current || !playerId || !currentRoom) return;
     
+    console.log("Setting player ready:", isReady);
     wsRef.current.send(JSON.stringify({
       type: 'setReady',
       playerId,
       roomId: currentRoom.id,
       isReady
     }));
-  };
+  }, [playerId, currentRoom]);
 
   useEffect(() => {
     connectToServer();
@@ -336,7 +372,7 @@ export const useGameWebSocket = () => {
         clearInterval(countdownIntervalRef.current);
       }
     };
-  }, []);
+  }, [connectToServer]);
 
   return {
     playerId,

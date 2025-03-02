@@ -5,6 +5,7 @@ import RoomsList from './RoomsList';
 import CreateRoom from './CreateRoom';
 import RoomLobby from './RoomLobby';
 import { Room } from '@/types/room';
+import { toast } from 'sonner';
 
 interface MainMenuProps {
   playerName: string;
@@ -54,11 +55,19 @@ const MainMenu: React.FC<MainMenuProps> = ({
     // Get rooms list when viewing rooms
     if (view === 'rooms') {
       getRoomsList();
+      
+      // Set up polling for rooms list
+      const interval = setInterval(() => {
+        getRoomsList();
+      }, 5000);
+      
+      return () => clearInterval(interval);
     }
   }, [view, getRoomsList]);
   
   const handleRoomsClick = () => {
     if (!playerName) {
+      toast.error("Please enter your name first");
       return;
     }
     setView('rooms');
@@ -66,7 +75,20 @@ const MainMenu: React.FC<MainMenuProps> = ({
   };
   
   const handleCreateRoomClick = () => {
+    if (!playerName) {
+      toast.error("Please enter your name first");
+      return;
+    }
     setView('create-room');
+  };
+  
+  const handleCreateRoom = (name: string, visibility: 'public' | 'private', maxPlayers: number) => {
+    if (!playerName) {
+      toast.error("Please enter your name first");
+      return;
+    }
+    console.log("MainMenu: Creating room", { name, visibility, maxPlayers, playerName });
+    createRoom(name, visibility, maxPlayers);
   };
   
   const handleCancelCreateRoom = () => {
@@ -96,12 +118,13 @@ const MainMenu: React.FC<MainMenuProps> = ({
             onRefresh={getRoomsList}
             onJoinRoom={joinRoom}
             onCreateRoomClick={handleCreateRoomClick}
+            isJoining={isJoiningRoom}
           />
         );
       case 'create-room':
         return (
           <CreateRoom 
-            onCreateRoom={createRoom}
+            onCreateRoom={handleCreateRoom}
             onCancel={handleCancelCreateRoom}
             isCreating={isCreatingRoom}
           />
