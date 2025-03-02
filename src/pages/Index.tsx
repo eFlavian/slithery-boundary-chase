@@ -1,41 +1,8 @@
 
-import { useEffect, useState } from "react";
-import { useSearchParams } from 'react-router-dom';
+import { useEffect } from "react";
 import GameBoard from "@/components/GameBoard";
-import useGameWebSocket from "@/components/game/useGameWebSocket";
-import Lobby from "@/components/game/Lobby";
 
 const Index = () => {
-  const [playerName, setPlayerName] = useState(() => {
-    return localStorage.getItem('playerName') || '';
-  });
-
-  const {
-    playerId,
-    sessions,
-    currentSession,
-    isHost,
-    isReady,
-    joinCode,
-    createSession,
-    joinSession,
-    leaveSession,
-    toggleReady,
-    toggleSessionVisibility,
-    fetchSessions,
-    startGame,
-    isPlaying
-  } = useGameWebSocket();
-
-  const [searchParams] = useSearchParams();
-
-  // Save player name to local storage
-  useEffect(() => {
-    if (playerName) {
-      localStorage.setItem('playerName', playerName);
-    }
-  }, [playerName]);
-
   // Prevent touch devices from zooming when double-tapping the game
   useEffect(() => {
     const preventZoom = (e: TouchEvent) => {
@@ -56,53 +23,8 @@ const Index = () => {
       document.removeEventListener('touchmove', preventZoom);
     };
   }, []);
-
-  // Check for join code in URL
-  useEffect(() => {
-    const codeFromUrl = searchParams.get('code');
-    if (codeFromUrl && playerId && playerName) {
-      console.log('Joining session from URL code:', codeFromUrl);
-      joinSession(codeFromUrl);
-    }
-  }, [searchParams, playerId, playerName]);
-
-  const handleStartGame = () => {
-    if (!playerName.trim()) {
-      return;
-    }
-    console.log('Starting game with player name:', playerName.trim());
-    startGame(playerName.trim());
-  };
   
-  console.log('Rendering Index component, isPlaying:', isPlaying);
-  
-  return (
-    <>
-      {isPlaying ? (
-        <GameBoard />
-      ) : (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800 p-4">
-          <Lobby 
-            playerName={playerName}
-            setPlayerName={setPlayerName}
-            playerId={playerId}
-            sessions={sessions}
-            currentSession={currentSession}
-            isHost={isHost}
-            isReady={isReady}
-            joinCode={joinCode}
-            createSession={createSession}
-            joinSession={joinSession}
-            leaveSession={leaveSession}
-            toggleReady={toggleReady}
-            toggleSessionVisibility={toggleSessionVisibility}
-            fetchSessions={fetchSessions}
-            handleStartGame={handleStartGame}
-          />
-        </div>
-      )}
-    </>
-  );
+  return <GameBoard />;
 };
 
 export default Index;

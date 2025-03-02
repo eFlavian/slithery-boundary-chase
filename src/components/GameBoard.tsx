@@ -8,7 +8,9 @@ import Minimap from './game/Minimap';
 import PlayerScore from './game/PlayerScore';
 import Leaderboard from './game/Leaderboard';
 import SpeedBoost from './game/SpeedBoost';
+import StartScreen from './game/StartScreen';
 import GameCanvas from './game/GameCanvas';
+import Lobby from './game/Lobby';
 import useGameWebSocket from './game/useGameWebSocket';
 
 type Position = {
@@ -38,27 +40,57 @@ const GameBoard: React.FC = () => {
     isPlaying,
     isMinimapVisible,
     minimapTimeLeft,
+    sessionId,
+    isHost,
+    isLobbyPrivate,
+    publicSessions,
+    inLobby,
     sendDirection,
     sendUpdate,
     sendSpeedBoost,
+    startGame,
     setGameOver,
     setIsPlaying,
-    currentSession,
+    createSession,
+    joinSession,
+    setReadyStatus,
+    toggleLobbyPrivacy,
     leaveSession
   } = useGameWebSocket();
 
-  const currentPlayer = players.find(p => p.id === playerId);
-  const score = currentPlayer?.score || 0;
-  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
-
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
+  const [playerName, setPlayerName] = useState(() => {
+    const savedName = localStorage.getItem('playerName');
+    return savedName || '';
+  });
+  
+  // Save player name to localStorage when it changes
+  useEffect(() => {
+    if (playerName) {
+      localStorage.setItem('playerName', playerName);
+    }
+  }, [playerName]);
   
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
   const cameraPositionRef = useRef({ x: 0, y: 0 });
   const lastUpdateTime = useRef(0);
   const animationFrameRef = useRef<number>();
+
+  // Get current player before it's used
+  const currentPlayer = players.find(p => p.id === playerId);
+  const score = currentPlayer?.score || 0;
+  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
+
+  const handleStartGame = () => {
+    if (!playerName.trim()) {
+      toast.error("Please enter a name first!");
+      return;
+    }
+
+    startGame(playerName.trim());
+  };
 
   const handleDirection = (newDirection: Direction) => {
     const oppositeDirections = {
@@ -123,15 +155,6 @@ const GameBoard: React.FC = () => {
           setIsSpeedBoostActive(true);
         }
         break;
-      case 'escape':
-        event.preventDefault();
-        // Handle exit game
-        if (isPlaying && currentSession) {
-          leaveSession();
-          setIsPlaying(false);
-          toast.info("Left the game session");
-        }
-        break;
     }
   };
 
@@ -153,13 +176,9 @@ const GameBoard: React.FC = () => {
 
   useEffect(() => {
     if (!gameOver && playerId && isPlaying) {
-      console.log('Starting game loop, isPlaying:', isPlaying, 'playerId:', playerId);
       const speed = isSpeedBoostActive ? INITIAL_SPEED / 2 : INITIAL_SPEED;
       gameLoop.current = window.setInterval(updateGame, speed);
-      return () => {
-        console.log('Clearing game loop');
-        clearInterval(gameLoop.current);
-      };
+      return () => clearInterval(gameLoop.current);
     }
   }, [gameOver, direction, isSpeedBoostActive, playerId, isPlaying]);
 
@@ -198,12 +217,16 @@ const GameBoard: React.FC = () => {
   };
 
   useEffect(() => {
-    console.log('Players updated:', players);
-    console.log('Current player:', currentPlayer);
-    console.log('isPlaying:', isPlaying);
-    
+    updateCamera();
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (currentPlayer?.snake?.[0]) {
-      console.log('Setting initial camera position for player:', currentPlayer.id);
       const containerWidth = window.innerWidth;
       const containerHeight = window.innerHeight;
 
@@ -212,16 +235,7 @@ const GameBoard: React.FC = () => {
         y: containerHeight / 2 - (currentPlayer.snake[0].y * CELL_SIZE)
       };
     }
-  }, [players, currentPlayer, isPlaying]);
-
-  useEffect(() => {
-    updateCamera();
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, []);
+  }, [playerId]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -235,6 +249,34 @@ const GameBoard: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <ThemeToggle />
+
+      {!isPlaying && !gameOver && !inLobby && (
+        <StartScreen 
+          playerName={playerName}
+          setPlayerName={setPlayerName}
+          handleStartGame={handleStartGame}
+        />
+      )}
+      
+      {!isPlaying && !gameOver && inLobby && (
+        <Lobby 
+          playerId={playerId}
+          playerName={playerName}
+          setPlayerName={setPlayerName}
+          handleStartGame={handleStartGame}
+          joinSession={joinSession}
+          createSession={createSession}
+          isHost={isHost}
+          sessionId={sessionId}
+          players={players}
+          onReadyStatusChange={setReadyStatus}
+          isLobbyPrivate={isLobbyPrivate}
+          toggleLobbyPrivacy={toggleLobbyPrivacy}
+          leaveSession={leaveSession}
+          publicSessions={publicSessions}
+          joinPublicSession={joinSession}
+        />
+      )}
 
       <Minimap 
         isMinimapVisible={isMinimapVisible}
@@ -272,32 +314,7 @@ const GameBoard: React.FC = () => {
         setIsSpeedBoostActive={setIsSpeedBoostActive}
       />
 
-      {gameOver && (
-        <GameOver 
-          score={score} 
-          onExit={() => {
-            if (currentSession) {
-              leaveSession();
-            }
-            setGameOver(false);
-          }} 
-        />
-      )}
-      
-      {/* Exit game button */}
-      {isPlaying && (
-        <button 
-          onClick={() => {
-            if (currentSession) {
-              leaveSession();
-            }
-            setIsPlaying(false);
-          }}
-          className="fixed top-4 right-4 z-50 bg-red-500/80 hover:bg-red-600 text-white px-3 py-1 rounded-md text-sm"
-        >
-          Exit Game
-        </button>
-      )}
+      {gameOver && <GameOver score={score} />}
     </div>
   );
 };

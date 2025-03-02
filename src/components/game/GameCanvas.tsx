@@ -34,13 +34,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   getViewportTransform,
   currentPlayer
 }) => {
-  // Debug logs for game state
-  useEffect(() => {
-    console.log('GameCanvas received players:', players);
-    console.log('GameCanvas received foods:', foods);
-    console.log('GameCanvas received current player:', currentPlayer);
-  }, [players, foods, currentPlayer]);
-
   // Create hash pattern for the grid background
   const createHashPattern = () => {
     return (
@@ -105,13 +98,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             </div>
           ))}
 
-          {players.map(player => {
-            if (!player.snake || player.snake.length === 0) {
-              console.log('Player with no snake:', player);
-              return null;
-            }
-            
-            return player.snake.map((segment: Position, index: number) => (
+          {players.map(player => (
+            player.snake.map((segment: Position, index: number) => (
               <div
                 key={`${player.id}-${index}`}
                 className={`absolute will-change-transform ${index === 0 ? 'z-20' : ''}`}
@@ -157,8 +145,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                   />
                 )}
               </div>
-            ));
-          })}
+            ))
+          ))}
 
           {foods.map((food, index) => (
             <div

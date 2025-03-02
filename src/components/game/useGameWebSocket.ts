@@ -8,22 +8,6 @@ type Position = {
 };
 type FoodType = 'normal' | 'special';
 type FoodItem = Position & { type: FoodType };
-type SessionStatus = 'waiting' | 'playing' | 'ended';
-type SessionVisibility = 'public' | 'private';
-
-export type Session = {
-  id: string;
-  code: string;
-  name: string;
-  hostId: string;
-  players: Array<{
-    id: string;
-    name: string;
-    isReady: boolean;
-  }>;
-  status: SessionStatus;
-  visibility: SessionVisibility;
-};
 
 export const useGameWebSocket = () => {
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -37,11 +21,12 @@ export const useGameWebSocket = () => {
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [currentSession, setCurrentSession] = useState<Session | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [isHost, setIsHost] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const [joinCode, setJoinCode] = useState<string>('');
+  const [isLobbyPrivate, setIsLobbyPrivate] = useState(false);
+  const [publicSessions, setPublicSessions] = useState<any[]>([]);
+  const [inLobby, setInLobby] = useState(false);
   
   const wsRef = useRef<WebSocket | null>(null);
   const minimapTimerRef = useRef<number>();
@@ -50,6 +35,9 @@ export const useGameWebSocket = () => {
   const countdownIntervalRef = useRef<number>();
 
   const connectToServer = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionFromUrl = urlParams.get('session');
+    
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
     const wsUrl = `${protocol}//${wsHost}`;
@@ -66,19 +54,26 @@ export const useGameWebSocket = () => {
       console.log('Connected to server');
       toast.success('Connected to game server');
       setReconnectAttempts(0);
+      
+      if (sessionFromUrl) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
     };
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      console.log('Received message:', message.type, message.data);
 
       switch (message.type) {
         case 'init':
           setPlayerId(message.data.playerId);
+          if (sessionFromUrl) {
+            setTimeout(() => {
+              joinSession(sessionFromUrl);
+            }, 500);
+          }
           break;
 
         case 'gameState':
-          console.log('Game state update:', message.data);
           setPlayers(message.data.players);
           setFoods(message.data.foods);
           setYellowDots(message.data.yellowDots || []);
@@ -93,6 +88,7 @@ export const useGameWebSocket = () => {
           setGameOver(true);
           setIsPlaying(false);
           setIsMinimapVisible(false);
+          setInLobby(false);
           if (minimapTimerRef.current) {
             clearTimeout(minimapTimerRef.current);
           }
@@ -161,62 +157,44 @@ export const useGameWebSocket = () => {
           }, message.data.duration * 1000);
           break;
           
-        case 'sessionsList':
-          setSessions(message.data.sessions);
-          break;
-          
         case 'sessionCreated':
-          setCurrentSession(message.data.session);
+          setSessionId(message.data.sessionId);
           setIsHost(true);
-          setJoinCode(message.data.session.code);
-          toast.success(`Session created with code: ${message.data.session.code}`);
+          setInLobby(true);
+          setIsLobbyPrivate(message.data.isPrivate);
           break;
           
         case 'sessionJoined':
-          setCurrentSession(message.data.session);
-          setIsHost(message.data.session.hostId === playerId);
-          toast.success(`Joined session: ${message.data.session.name}`);
+          setSessionId(message.data.sessionId);
+          setIsHost(message.data.isHost);
+          setInLobby(true);
+          setIsLobbyPrivate(message.data.isPrivate);
+          toast.success(`Joined ${message.data.hostName}'s game!`);
           break;
           
-        case 'sessionUpdated':
-          setCurrentSession(message.data.session);
-          
-          if (message.data.session.status === 'playing' && !isPlaying) {
-            setIsPlaying(true);
-            setGameOver(false);
-            toast.success('All players ready! Game starting...');
-            
-            const playerNames = new Map();
-            message.data.session.players.forEach(player => {
-              playerNames.set(player.id, player.name);
-            });
-            
-            if (playerId && playerNames.has(playerId)) {
-              console.log('Auto-spawning player:', playerId, playerNames.get(playerId));
-              startGame(playerNames.get(playerId));
-            }
-          }
-          break;
-          
-        case 'playerReadyChanged':
-          if (message.data.playerId === playerId) {
-            setIsReady(message.data.isReady);
-          }
-          break;
-          
-        case 'sessionError':
+        case 'sessionJoinError':
           toast.error(message.data.message);
           break;
           
+        case 'sessionPlayerUpdate':
+          setPlayers(message.data.players);
+          break;
+          
+        case 'publicSessionsUpdate':
+          setPublicSessions(message.data.sessions);
+          break;
+          
+        case 'gameStarting':
+          toast.success('All players ready! Game starting...');
+          setIsPlaying(true);
+          setInLobby(false);
+          break;
+          
         case 'sessionClosed':
-          setCurrentSession(null);
+          toast.error('The session has been closed by the host');
+          setSessionId(null);
           setIsHost(false);
-          setIsReady(false);
-          if (isPlaying) {
-            setGameOver(true);
-            setIsPlaying(false);
-          }
-          toast.error('Session closed');
+          setInLobby(false);
           break;
       }
     };
@@ -275,93 +253,85 @@ export const useGameWebSocket = () => {
     }));
   };
 
-  const createSession = (sessionName: string, visibility: SessionVisibility = 'private') => {
-    if (!wsRef.current || !playerId) return;
-    
-    wsRef.current.send(JSON.stringify({
-      type: 'createSession',
-      sessionName,
-      playerId,
-      visibility
-    }));
-  };
-  
-  const joinSession = (code: string) => {
-    if (!wsRef.current || !playerId) return;
-    
-    wsRef.current.send(JSON.stringify({
-      type: 'joinSession',
-      code,
-      playerId
-    }));
-  };
-  
-  const leaveSession = () => {
-    if (!wsRef.current || !playerId || !currentSession) return;
-    
-    wsRef.current.send(JSON.stringify({
-      type: 'leaveSession',
-      sessionId: currentSession.id,
-      playerId
-    }));
-    
-    setCurrentSession(null);
-    setIsHost(false);
-    setIsReady(false);
-  };
-  
-  const toggleReady = () => {
-    if (!wsRef.current || !playerId || !currentSession) return;
-    
-    const newReadyState = !isReady;
-    
-    wsRef.current.send(JSON.stringify({
-      type: 'toggleReady',
-      sessionId: currentSession.id,
-      playerId,
-      isReady: newReadyState
-    }));
-    
-    setIsReady(newReadyState);
-  };
-  
-  const toggleSessionVisibility = () => {
-    if (!wsRef.current || !playerId || !currentSession || !isHost) return;
-    
-    const newVisibility = currentSession.visibility === 'public' ? 'private' : 'public';
-    
-    wsRef.current.send(JSON.stringify({
-      type: 'toggleVisibility',
-      sessionId: currentSession.id,
-      playerId,
-      visibility: newVisibility
-    }));
-  };
-  
-  const fetchSessions = () => {
-    if (!wsRef.current || !playerId) return;
-    
-    wsRef.current.send(JSON.stringify({
-      type: 'getSessions',
-      playerId
-    }));
-  };
-
   const startGame = (playerName: string) => {
     if (!wsRef.current || !playerId) return;
     
-    console.log('Starting game with player name:', playerName);
     wsRef.current.send(JSON.stringify({
       type: 'spawn',
       playerName,
       playerId
     }));
     
-    if (!currentSession) {
-      setIsPlaying(true);
-    }
+    setIsPlaying(true);
+  };
+  
+  const createSession = (isPublic: boolean) => {
+    if (!wsRef.current || !playerId) return;
     
-    setGameOver(false);
+    wsRef.current.send(JSON.stringify({
+      type: 'createSession',
+      playerId,
+      isPrivate: !isPublic
+    }));
+  };
+  
+  const joinSession = (sessionId: string) => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'joinSession',
+      playerId,
+      sessionId
+    }));
+  };
+  
+  const setReadyStatus = (isReady: boolean) => {
+    if (!wsRef.current || !playerId || !sessionId) return;
+    
+    setIsReady(isReady);
+    wsRef.current.send(JSON.stringify({
+      type: 'setReady',
+      playerId,
+      sessionId,
+      isReady
+    }));
+  };
+  
+  const toggleLobbyPrivacy = () => {
+    if (!wsRef.current || !playerId || !sessionId || !isHost) return;
+    
+    const newPrivacyStatus = !isLobbyPrivate;
+    setIsLobbyPrivate(newPrivacyStatus);
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'setSessionPrivacy',
+      playerId,
+      sessionId,
+      isPrivate: newPrivacyStatus
+    }));
+  };
+  
+  const leaveSession = () => {
+    if (!wsRef.current || !playerId || !sessionId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'leaveSession',
+      playerId,
+      sessionId
+    }));
+    
+    setSessionId(null);
+    setIsHost(false);
+    setInLobby(false);
+  };
+  
+  const requestPublicSessions = () => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'getPublicSessions',
+      playerId
+    }));
   };
 
   useEffect(() => {
@@ -384,6 +354,18 @@ export const useGameWebSocket = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!sessionId && playerId) {
+      const interval = setInterval(() => {
+        requestPublicSessions();
+      }, 5000);
+      
+      requestPublicSessions();
+      
+      return () => clearInterval(interval);
+    }
+  }, [sessionId, playerId]);
+
   return {
     playerId,
     players,
@@ -394,23 +376,24 @@ export const useGameWebSocket = () => {
     isPlaying,
     isMinimapVisible,
     minimapTimeLeft,
+    sessionId,
+    isHost,
+    isReady,
+    isLobbyPrivate,
+    publicSessions,
+    inLobby,
     sendDirection,
     sendUpdate,
     sendSpeedBoost,
     startGame,
     setGameOver,
     setIsPlaying,
-    sessions,
-    currentSession,
-    isHost,
-    isReady,
-    joinCode,
     createSession,
     joinSession,
+    setReadyStatus,
+    toggleLobbyPrivacy,
     leaveSession,
-    toggleReady,
-    toggleSessionVisibility,
-    fetchSessions
+    requestPublicSessions
   };
 };
 

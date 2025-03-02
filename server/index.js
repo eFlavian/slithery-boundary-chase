@@ -13,7 +13,9 @@ const gameState = {
   yellowDots: [],
   portals: [],
   playerCount: 0,
-  sessions: new Map()
+  // Session management
+  sessions: new Map(),
+  clientToPlayer: new Map() // maps WebSocket clients to player IDs
 };
 
 const GRID_SIZE = 256;
@@ -24,10 +26,9 @@ const INITIAL_YELLOW_DOTS = 5;
 const FOOD_SPAWN_INTERVAL = 5000;
 const PORTAL_SPAWN_INTERVAL = 20000;
 const YELLOW_DOT_SPAWN_INTERVAL = 60000;
-const MINIMAP_DURATION = 20;
-const SESSION_CODE_LENGTH = 6;
-
-const connections = new Map();
+const MINIMAP_DURATION = 20; // Changed from 10 to 20 seconds
+const SESSION_CODE_LENGTH = 6; // Length of session codes
+const MAX_PLAYERS_PER_SESSION = 10; // Maximum players per session
 
 function getRandomPosition() {
   return {
@@ -128,207 +129,231 @@ function handleCollision(playerId, newHead) {
   return { collision: false };
 }
 
-function generateSessionCode() {
-  const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < SESSION_CODE_LENGTH; i++) {
-    code += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-  return code;
-}
-
-function createGameSession(sessionName, hostId, visibility = 'private') {
-  const sessionId = nanoid();
-  const sessionCode = generateSessionCode();
-  const session = {
+// Session management functions
+function createGameSession(playerId, isPrivate = false) {
+  const player = gameState.players.get(playerId);
+  if (!player) return null;
+  
+  // Generate a unique session ID (6 character alphanumeric code)
+  const sessionId = nanoid(SESSION_CODE_LENGTH).toUpperCase();
+  
+  const newSession = {
     id: sessionId,
-    code: sessionCode,
-    name: sessionName,
-    hostId: hostId,
-    players: [{ id: hostId, name: gameState.players.get(hostId)?.name || 'Host', isReady: false }],
-    status: 'waiting',
-    visibility: visibility,
-    createdAt: Date.now()
+    hostId: playerId,
+    hostName: player.name,
+    players: [{
+      id: playerId,
+      name: player.name,
+      isHost: true,
+      isReady: false
+    }],
+    isPrivate: isPrivate,
+    isActive: true,
+    startTime: null
   };
   
-  gameState.sessions.set(sessionId, session);
+  // Associate player with this session
+  player.sessionId = sessionId;
   
-  const player = gameState.players.get(hostId);
-  if (player) {
-    player.sessionId = sessionId;
-  }
+  // Store the session
+  gameState.sessions.set(sessionId, newSession);
   
-  return session;
+  return sessionId;
 }
 
-function joinGameSession(sessionCode, playerId) {
-  const session = Array.from(gameState.sessions.values()).find(s => s.code === sessionCode);
-  
-  if (!session) {
-    return { error: 'Session not found' };
-  }
-  
-  if (session.status === 'playing') {
-    return { error: 'Game already in progress' };
-  }
-  
+function joinGameSession(playerId, sessionId) {
   const player = gameState.players.get(playerId);
-  if (!player) {
-    return { error: 'Player not found' };
+  const session = gameState.sessions.get(sessionId);
+  
+  if (!player) return { success: false, message: 'Player not found' };
+  if (!session) return { success: false, message: 'Session not found' };
+  if (!session.isActive) return { success: false, message: 'Session is no longer active' };
+  if (session.players.length >= MAX_PLAYERS_PER_SESSION) {
+    return { success: false, message: 'Session is full' };
   }
   
-  if (session.players.some(p => p.id === playerId)) {
-    return { session }; // Already in session
+  // Don't allow joining if game has already started
+  if (session.startTime) {
+    return { success: false, message: 'Game already in progress' };
   }
   
+  // Check if player is already in this session
+  if (player.sessionId === sessionId) {
+    return { success: true };
+  }
+  
+  // Remove player from any existing session
+  if (player.sessionId) {
+    leaveGameSession(playerId);
+  }
+  
+  // Add player to this session
   session.players.push({
     id: playerId,
     name: player.name,
+    isHost: false,
     isReady: false
   });
   
-  player.sessionId = session.id;
+  // Update player's session
+  player.sessionId = sessionId;
   
-  return { session };
+  return { 
+    success: true, 
+    isHost: session.hostId === playerId,
+    isPrivate: session.isPrivate,
+    hostName: session.hostName
+  };
 }
 
-function leaveGameSession(sessionId, playerId) {
-  const session = gameState.sessions.get(sessionId);
-  if (!session) return { error: 'Session not found' };
-  
-  session.players = session.players.filter(p => p.id !== playerId);
-  
+function leaveGameSession(playerId) {
   const player = gameState.players.get(playerId);
-  if (player) {
-    player.sessionId = null;
-    player.isPlaying = false;
+  
+  if (!player || !player.sessionId) return false;
+  
+  const sessionId = player.sessionId;
+  const session = gameState.sessions.get(sessionId);
+  
+  if (!session) return false;
+  
+  // Remove player from session players array
+  const playerIndex = session.players.findIndex(p => p.id === playerId);
+  if (playerIndex !== -1) {
+    session.players.splice(playerIndex, 1);
   }
   
-  if (playerId === session.hostId) {
+  // Clear player's session
+  player.sessionId = null;
+  
+  // If host leaves, either assign a new host or close the session
+  if (session.hostId === playerId) {
     if (session.players.length > 0) {
-      session.hostId = session.players[0].id;
+      // Assign the next player as host
+      const newHost = session.players[0];
+      session.hostId = newHost.id;
+      session.hostName = newHost.name;
+      newHost.isHost = true;
     } else {
+      // No players left, close the session
       gameState.sessions.delete(sessionId);
       return { closed: true };
     }
   }
   
-  if (session.players.length === 0) {
-    gameState.sessions.delete(sessionId);
-    return { closed: true };
-  }
-  
-  return { session };
+  return { closed: false, newHost: session.hostId };
 }
 
-function togglePlayerReady(sessionId, playerId, isReady) {
+function setPlayerReadyStatus(playerId, sessionId, isReady) {
   const session = gameState.sessions.get(sessionId);
-  if (!session) return { error: 'Session not found' };
+  if (!session) return null;
   
-  const playerIndex = session.players.findIndex(p => p.id === playerId);
-  if (playerIndex === -1) return { error: 'Player not in session' };
+  const playerInSession = session.players.find(p => p.id === playerId);
+  if (!playerInSession) return null;
   
-  session.players[playerIndex].isReady = isReady;
+  playerInSession.isReady = isReady;
   
-  const allReady = session.players.every(p => p.isReady);
-  if (allReady && session.players.length > 1) {
-    session.status = 'playing';
-    
-    session.players.forEach(sessionPlayer => {
-      const player = gameState.players.get(sessionPlayer.id);
-      if (player) {
-        player.isPlaying = true;
-        player.score = 0;
-        const spawnPosition = getRandomUnoccupiedPosition();
-        player.snake = [spawnPosition];
-      }
-    });
-    
-    return { session, gameStarted: true };
-  }
+  // Check if all players are ready to start the game
+  const allReady = session.players.length > 0 && 
+                  session.players.every(player => player.isReady);
   
-  return { session };
+  return { allReady };
 }
 
-function toggleSessionVisibility(sessionId, playerId, visibility) {
+function toggleSessionPrivacy(playerId, sessionId) {
   const session = gameState.sessions.get(sessionId);
-  if (!session) return { error: 'Session not found' };
   
-  if (session.hostId !== playerId) {
-    return { error: 'Only the host can change visibility' };
-  }
+  if (!session || session.hostId !== playerId) return false;
   
-  session.visibility = visibility;
-  return { session };
+  session.isPrivate = !session.isPrivate;
+  
+  return session.isPrivate;
 }
 
-function broadcastToSession(sessionId, message) {
+function getPublicSessions() {
+  return Array.from(gameState.sessions.values())
+    .filter(session => !session.isPrivate && session.isActive && !session.startTime)
+    .map(session => ({
+      id: session.id,
+      hostName: session.hostName,
+      players: session.players
+    }));
+}
+
+function startSessionGame(sessionId) {
   const session = gameState.sessions.get(sessionId);
   if (!session) return;
   
-  session.players.forEach(player => {
-    const playerConnection = connections.get(player.id);
-    if (playerConnection && playerConnection.readyState === 1) {
-      playerConnection.send(JSON.stringify(message));
+  // Set session as started
+  session.startTime = Date.now();
+  
+  // Set all players in this session to isPlaying
+  session.players.forEach(sessionPlayer => {
+    const player = gameState.players.get(sessionPlayer.id);
+    if (player) {
+      // Reset player state for game start
+      const spawnPosition = getRandomUnoccupiedPosition();
+      player.snake = [spawnPosition];
+      player.direction = 'RIGHT';
+      player.score = 0;
+      player.speedBoostPercentage = 0;
+      player.isPlaying = true;
+    }
+  });
+  
+  // Broadcast to all clients in this session
+  const playersInSession = session.players.map(p => p.id);
+  wss.clients.forEach(client => {
+    const clientPlayerId = gameState.clientToPlayer.get(client);
+    if (client.readyState === 1 && clientPlayerId && playersInSession.includes(clientPlayerId)) {
+      client.send(JSON.stringify({
+        type: 'gameStarting',
+        data: { sessionId }
+      }));
     }
   });
 }
 
-function broadcastGameState() {
-  const playersArray = Array.from(gameState.players.values())
-    .filter(player => player.isPlaying)
-    .map(player => ({
-      id: player.id,
-      name: player.name,
-      snake: player.snake,
-      direction: player.direction,
-      score: player.score,
-      speedBoostPercentage: player.speedBoostPercentage,
-      isPlaying: player.isPlaying,
-      minimapVisible: player.minimapVisible,
-      minimapTimer: player.minimapTimer
-    }));
-
-  const state = {
-    players: playersArray,
-    foods: gameState.foods,
-    yellowDots: gameState.yellowDots,
-    portals: gameState.portals
-  };
-
-  const stateMsg = JSON.stringify({
-    type: 'gameState',
-    data: state
-  });
-
-  for (const [playerId, connection] of connections.entries()) {
-    const player = gameState.players.get(playerId);
-    if (player && player.isPlaying && connection.readyState === 1) {
-      connection.send(stateMsg);
+function broadcastSessionPlayerUpdate(sessionId) {
+  const session = gameState.sessions.get(sessionId);
+  if (!session) return;
+  
+  // Get the current session players
+  const sessionPlayers = session.players;
+  
+  // Broadcast to all clients in this session
+  const playersInSession = sessionPlayers.map(p => p.id);
+  wss.clients.forEach(client => {
+    const clientPlayerId = gameState.clientToPlayer.get(client);
+    if (client.readyState === 1 && clientPlayerId && playersInSession.includes(clientPlayerId)) {
+      client.send(JSON.stringify({
+        type: 'sessionPlayerUpdate',
+        data: { players: sessionPlayers }
+      }));
     }
+  });
+  
+  // Check if all players are ready, and if so, start the game after a short delay
+  const allReady = sessionPlayers.length > 0 && sessionPlayers.every(p => p.isReady);
+  
+  if (allReady && !session.startTime) {
+    // Give players a 3-second countdown before starting
+    setTimeout(() => {
+      startSessionGame(sessionId);
+    }, 3000);
   }
 }
 
-function broadcastSessionsList(playerId) {
-  const sessionsArray = Array.from(gameState.sessions.values())
-    .filter(session => session.visibility === 'public')
-    .map(session => ({
-      id: session.id,
-      code: session.code,
-      name: session.name,
-      hostId: session.hostId,
-      players: session.players,
-      status: session.status,
-      visibility: session.visibility
-    }));
-
-  const connection = connections.get(playerId);
-  if (connection && connection.readyState === 1) {
-    connection.send(JSON.stringify({
-      type: 'sessionsList',
-      data: { sessions: sessionsArray }
-    }));
-  }
+function broadcastPublicSessionsUpdate() {
+  const publicSessions = getPublicSessions();
+  
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(JSON.stringify({
+        type: 'publicSessionsUpdate',
+        data: { sessions: publicSessions }
+      }));
+    }
+  });
 }
 
 function initializeGame() {
@@ -348,18 +373,47 @@ function initializeGame() {
   setInterval(spawnPortal, PORTAL_SPAWN_INTERVAL);
   setInterval(spawnYellowDot, YELLOW_DOT_SPAWN_INTERVAL);
   
-  setInterval(() => {
-    const now = Date.now();
-    for (const [sessionId, session] of gameState.sessions.entries()) {
-      if (now - session.createdAt > 2 * 60 * 60 * 1000) {
-        gameState.sessions.delete(sessionId);
-      }
+  // Periodically broadcast public sessions update
+  setInterval(broadcastPublicSessionsUpdate, 5000);
+}
+
+function broadcastGameState() {
+  const playersArray = Array.from(gameState.players.values()).map(player => ({
+    id: player.id,
+    name: player.name,
+    snake: player.snake,
+    direction: player.direction,
+    score: player.score,
+    speedBoostPercentage: player.speedBoostPercentage,
+    isPlaying: player.isPlaying,
+    minimapVisible: player.minimapVisible,
+    minimapTimer: player.minimapTimer
+  }));
+
+  const state = {
+    players: playersArray,
+    foods: gameState.foods,
+    yellowDots: gameState.yellowDots,
+    portals: gameState.portals
+  };
+
+  const stateMsg = JSON.stringify({
+    type: 'gameState',
+    data: state
+  });
+
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(stateMsg);
     }
-  }, 30 * 60 * 1000);
+  });
 }
 
 wss.on('connection', (ws) => {
   const playerId = `player${++gameState.playerCount}`;
+  
+  // Store client-to-player mapping
+  gameState.clientToPlayer.set(ws, playerId);
   
   const spawnPosition = getRandomUnoccupiedPosition();
   
@@ -373,16 +427,16 @@ wss.on('connection', (ws) => {
     isPlaying: false,
     minimapVisible: false,
     minimapTimer: null,
-    minimapTimeLeft: 0,
-    sessionId: null
+    minimapTimeLeft: 0, // Track time left on minimap
+    sessionId: null // Track which session this player belongs to
   });
-  
-  connections.set(playerId, ws);
 
   ws.send(JSON.stringify({
     type: 'init',
     data: { playerId }
   }));
+
+  broadcastGameState();
 
   ws.on('message', (message) => {
     const data = JSON.parse(message);
@@ -447,29 +501,6 @@ wss.on('connection', (ws) => {
               message: collisionResult.message
             }
           }));
-          
-          if (player.sessionId) {
-            const session = gameState.sessions.get(player.sessionId);
-            if (session) {
-              const allPlayersDead = session.players.every(sessionPlayer => {
-                const gamePlayer = gameState.players.get(sessionPlayer.id);
-                return !gamePlayer || !gamePlayer.isPlaying;
-              });
-              
-              if (allPlayersDead && session.status === 'playing') {
-                session.status = 'waiting';
-                session.players.forEach(sessionPlayer => {
-                  sessionPlayer.isReady = false;
-                });
-                
-                broadcastToSession(session.id, {
-                  type: 'sessionUpdated',
-                  data: { session }
-                });
-              }
-            }
-          }
-          
           return;
         }
 
@@ -492,14 +523,17 @@ wss.on('connection', (ws) => {
         );
 
         if (yellowDotIndex !== -1) {
+          // Remove the yellow dot
           gameState.yellowDots.splice(yellowDotIndex, 1);
           
+          // Always send a fixed duration of 20 seconds (MINIMAP_DURATION)
+          // Don't add to existing duration
           ws.send(JSON.stringify({
             type: 'minimapUpdate',
             data: { 
               visible: true,
               duration: MINIMAP_DURATION,
-              reset: true
+              reset: true // Flag to indicate we should reset any existing timer
             }
           }));
         }
@@ -531,104 +565,119 @@ wss.on('connection', (ws) => {
         }
         break;
         
+      // Session management handlers
       case 'createSession':
-        const session = createGameSession(data.sessionName, data.playerId, data.visibility);
-        ws.send(JSON.stringify({
-          type: 'sessionCreated',
-          data: { session }
-        }));
+        const sessionId = createGameSession(data.playerId, data.isPrivate);
+        if (sessionId) {
+          ws.send(JSON.stringify({
+            type: 'sessionCreated',
+            data: { 
+              sessionId,
+              isPrivate: data.isPrivate
+            }
+          }));
+          
+          // Broadcast updated public sessions
+          broadcastPublicSessionsUpdate();
+        }
         break;
         
       case 'joinSession':
-        const joinResult = joinGameSession(data.code, data.playerId);
+        const joinResult = joinGameSession(data.playerId, data.sessionId);
         
-        if (joinResult.error) {
-          ws.send(JSON.stringify({
-            type: 'sessionError',
-            data: { message: joinResult.error }
-          }));
-        } else {
-          broadcastToSession(joinResult.session.id, {
-            type: 'sessionUpdated',
-            data: { session: joinResult.session }
-          });
-          
+        if (joinResult.success) {
           ws.send(JSON.stringify({
             type: 'sessionJoined',
-            data: { session: joinResult.session }
+            data: { 
+              sessionId: data.sessionId,
+              isHost: joinResult.isHost,
+              isPrivate: joinResult.isPrivate,
+              hostName: joinResult.hostName
+            }
+          }));
+          
+          // Broadcast session player update to all in session
+          broadcastSessionPlayerUpdate(data.sessionId);
+        } else {
+          ws.send(JSON.stringify({
+            type: 'sessionJoinError',
+            data: { message: joinResult.message }
           }));
         }
         break;
         
       case 'leaveSession':
-        if (!player.sessionId) return;
+        const leaveResult = leaveGameSession(data.playerId);
         
-        const leaveResult = leaveGameSession(data.sessionId, data.playerId);
-        
-        if (leaveResult.error) {
-          ws.send(JSON.stringify({
-            type: 'sessionError',
-            data: { message: leaveResult.error }
-          }));
-        } else if (leaveResult.closed) {
-          ws.send(JSON.stringify({
-            type: 'sessionClosed',
-            data: { message: 'Session closed' }
-          }));
-        } else {
-          broadcastToSession(data.sessionId, {
-            type: 'sessionUpdated',
-            data: { session: leaveResult.session }
-          });
-        }
-        break;
-        
-      case 'toggleReady':
-        if (!player.sessionId) return;
-        
-        const readyResult = togglePlayerReady(data.sessionId, data.playerId, data.isReady);
-        
-        if (readyResult.error) {
-          ws.send(JSON.stringify({
-            type: 'sessionError',
-            data: { message: readyResult.error }
-          }));
-        } else {
-          ws.send(JSON.stringify({
-            type: 'playerReadyChanged',
-            data: { 
-              playerId: data.playerId,
-              isReady: data.isReady 
+        if (leaveResult) {
+          if (leaveResult.closed) {
+            // Session was closed (host left and no players)
+            // Nothing more to do
+          } else {
+            // Broadcast session player update to all remaining in session
+            broadcastSessionPlayerUpdate(data.sessionId);
+            
+            // If there's a new host, notify them
+            if (leaveResult.newHost) {
+              const newHostClient = Array.from(gameState.clientToPlayer.entries())
+                .find(([_, pid]) => pid === leaveResult.newHost)?.[0];
+                
+              if (newHostClient && newHostClient.readyState === 1) {
+                newHostClient.send(JSON.stringify({
+                  type: 'becameHost',
+                  data: { sessionId: data.sessionId }
+                }));
+              }
             }
-          }));
+          }
           
-          broadcastToSession(data.sessionId, {
-            type: 'sessionUpdated',
-            data: { session: readyResult.session }
-          });
+          // Broadcast updated public sessions
+          broadcastPublicSessionsUpdate();
         }
         break;
         
-      case 'toggleVisibility':
-        if (!player.sessionId) return;
+      case 'setReady':
+        const readyResult = setPlayerReadyStatus(data.playerId, data.sessionId, data.isReady);
         
-        const visibilityResult = toggleSessionVisibility(data.sessionId, data.playerId, data.visibility);
-        
-        if (visibilityResult.error) {
-          ws.send(JSON.stringify({
-            type: 'sessionError',
-            data: { message: visibilityResult.error }
-          }));
-        } else {
-          broadcastToSession(data.sessionId, {
-            type: 'sessionUpdated',
-            data: { session: visibilityResult.session }
-          });
+        if (readyResult) {
+          // Update all players in the session about this change
+          broadcastSessionPlayerUpdate(data.sessionId);
         }
         break;
         
-      case 'getSessions':
-        broadcastSessionsList(data.playerId);
+      case 'setSessionPrivacy':
+        const isPrivate = toggleSessionPrivacy(data.playerId, data.sessionId);
+        
+        if (isPrivate !== null) {
+          // Broadcast to all in session about privacy change
+          const session = gameState.sessions.get(data.sessionId);
+          
+          if (session) {
+            const playersInSession = session.players.map(p => p.id);
+            
+            wss.clients.forEach(client => {
+              const clientPlayerId = gameState.clientToPlayer.get(client);
+              if (client.readyState === 1 && clientPlayerId && playersInSession.includes(clientPlayerId)) {
+                client.send(JSON.stringify({
+                  type: 'privacyChanged',
+                  data: { isPrivate }
+                }));
+              }
+            });
+            
+            // Broadcast updated public sessions if status changed
+            broadcastPublicSessionsUpdate();
+          }
+        }
+        break;
+        
+      case 'getPublicSessions':
+        const publicSessions = getPublicSessions();
+        
+        ws.send(JSON.stringify({
+          type: 'publicSessionsUpdate',
+          data: { sessions: publicSessions }
+        }));
         break;
     }
 
@@ -639,28 +688,48 @@ wss.on('connection', (ws) => {
     const player = gameState.players.get(playerId);
     
     if (player) {
+      // Clear any timers
       if (player.minimapTimer) {
         clearTimeout(player.minimapTimer);
       }
       
+      // If player was in a session, remove them
       if (player.sessionId) {
-        const leaveResult = leaveGameSession(player.sessionId, playerId);
-        if (!leaveResult.error && !leaveResult.closed) {
-          broadcastToSession(player.sessionId, {
-            type: 'sessionUpdated',
-            data: { session: leaveResult.session }
-          });
-        }
+        leaveGameSession(playerId);
+        broadcastSessionPlayerUpdate(player.sessionId);
       }
       
+      // Remove player
       gameState.players.delete(playerId);
     }
     
-    connections.delete(playerId);
+    // Remove client-to-player mapping
+    gameState.clientToPlayer.delete(ws);
     
     broadcastGameState();
+    // Also update public sessions
+    broadcastPublicSessionsUpdate();
   });
 });
+
+// Install nanoid for generating unique session IDs
+try {
+  import('nanoid');
+} catch (e) {
+  console.log('Installing nanoid package...');
+  await new Promise((resolve, reject) => {
+    const { exec } = require('child_process');
+    exec('npm install nanoid', (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error installing nanoid: ${error}`);
+        reject(error);
+        return;
+      }
+      console.log(`nanoid installed successfully`);
+      resolve();
+    });
+  });
+}
 
 initializeGame();
 
