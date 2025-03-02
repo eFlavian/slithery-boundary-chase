@@ -10,7 +10,6 @@ import Leaderboard from './game/Leaderboard';
 import SpeedBoost from './game/SpeedBoost';
 import StartScreen from './game/StartScreen';
 import GameCanvas from './game/GameCanvas';
-import Lobby from './game/Lobby';
 import useGameWebSocket from './game/useGameWebSocket';
 
 type Position = {
@@ -40,48 +39,23 @@ const GameBoard: React.FC = () => {
     isPlaying,
     isMinimapVisible,
     minimapTimeLeft,
-    sessionId,
-    isHost,
-    isLobbyPrivate,
-    publicSessions,
-    inLobby,
     sendDirection,
     sendUpdate,
     sendSpeedBoost,
     startGame,
     setGameOver,
-    setIsPlaying,
-    createSession,
-    joinSession,
-    setReadyStatus,
-    toggleLobbyPrivacy,
-    leaveSession
+    setIsPlaying
   } = useGameWebSocket();
 
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
-  const [playerName, setPlayerName] = useState(() => {
-    const savedName = localStorage.getItem('playerName');
-    return savedName || '';
-  });
-  
-  // Save player name to localStorage when it changes
-  useEffect(() => {
-    if (playerName) {
-      localStorage.setItem('playerName', playerName);
-    }
-  }, [playerName]);
+  const [playerName, setPlayerName] = useState('');
   
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
   const cameraPositionRef = useRef({ x: 0, y: 0 });
   const lastUpdateTime = useRef(0);
   const animationFrameRef = useRef<number>();
-
-  // Get current player before it's used
-  const currentPlayer = players.find(p => p.id === playerId);
-  const score = currentPlayer?.score || 0;
-  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
 
   const handleStartGame = () => {
     if (!playerName.trim()) {
@@ -182,6 +156,10 @@ const GameBoard: React.FC = () => {
     }
   }, [gameOver, direction, isSpeedBoostActive, playerId, isPlaying]);
 
+  const currentPlayer = players.find(p => p.id === playerId);
+  const score = currentPlayer?.score || 0;
+  const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
+
   const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
 
   const getViewportTransform = (snakeHead: Position) => {
@@ -250,31 +228,11 @@ const GameBoard: React.FC = () => {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <ThemeToggle />
 
-      {!isPlaying && !gameOver && !inLobby && (
+      {!isPlaying && !gameOver && (
         <StartScreen 
           playerName={playerName}
           setPlayerName={setPlayerName}
           handleStartGame={handleStartGame}
-        />
-      )}
-      
-      {!isPlaying && !gameOver && inLobby && (
-        <Lobby 
-          playerId={playerId}
-          playerName={playerName}
-          setPlayerName={setPlayerName}
-          handleStartGame={handleStartGame}
-          joinSession={joinSession}
-          createSession={createSession}
-          isHost={isHost}
-          sessionId={sessionId}
-          players={players}
-          onReadyStatusChange={setReadyStatus}
-          isLobbyPrivate={isLobbyPrivate}
-          toggleLobbyPrivacy={toggleLobbyPrivacy}
-          leaveSession={leaveSession}
-          publicSessions={publicSessions}
-          joinPublicSession={joinSession}
         />
       )}
 
