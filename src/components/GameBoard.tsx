@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import ThemeToggle from './game/ThemeToggle';
@@ -278,6 +277,3 @@ const GameBoard: React.FC = () => {
 };
 
 export default GameBoard;
-
-
-// GOOD VERSION
