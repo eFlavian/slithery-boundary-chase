@@ -1,6 +1,6 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
+import { Room, RoomPlayer } from '@/types/room';
 
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type Position = {
@@ -21,6 +21,12 @@ export const useGameWebSocket = () => {
   const [isMinimapVisible, setIsMinimapVisible] = useState(false);
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [playerName, setPlayerName] = useState('');
+  
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   
   const wsRef = useRef<WebSocket | null>(null);
   const minimapTimerRef = useRef<number>();
@@ -29,7 +35,6 @@ export const useGameWebSocket = () => {
   const countdownIntervalRef = useRef<number>();
 
   const connectToServer = () => {
-    // Fix for mobile: Use the current hostname instead of hardcoded localhost
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
     const wsUrl = `${protocol}//${wsHost}`;
@@ -50,6 +55,7 @@ export const useGameWebSocket = () => {
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
+      console.log('Received message:', message);
 
       switch (message.type) {
         case 'init':
@@ -84,7 +90,6 @@ export const useGameWebSocket = () => {
           break;
           
         case 'minimapUpdate':
-          // Clear any existing timers if this is a reset
           if (message.data.reset) {
             if (minimapTimerRef.current) {
               clearTimeout(minimapTimerRef.current);
@@ -100,10 +105,8 @@ export const useGameWebSocket = () => {
           setIsMinimapVisible(message.data.visible);
           setMinimapTimeLeft(message.data.duration);
           
-          // Start new countdown
           let timeLeft = message.data.duration;
           
-          // Clear existing countdown interval if it exists
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
@@ -112,9 +115,7 @@ export const useGameWebSocket = () => {
             timeLeft -= 1;
             setMinimapTimeLeft(timeLeft);
             
-            // Start blinking when 3 seconds are left
             if (timeLeft === 3) {
-              // Clear any existing blink interval
               if (minimapBlinkRef.current) {
                 clearInterval(minimapBlinkRef.current);
               }
@@ -133,7 +134,6 @@ export const useGameWebSocket = () => {
             }
           }, 1000);
           
-          // Set timeout to stop the minimap visibility
           minimapTimerRef.current = window.setTimeout(() => {
             setIsMinimapVisible(false);
             if (minimapBlinkRef.current) {
@@ -144,6 +144,41 @@ export const useGameWebSocket = () => {
             }
           }, message.data.duration * 1000);
           break;
+
+        case 'roomsList':
+          setRooms(message.data.rooms);
+          break;
+
+        case 'roomCreated':
+          setIsCreatingRoom(false);
+          setCurrentRoom(message.data.room);
+          toast.success(`Room "${message.data.room.name}" created!`);
+          break;
+
+        case 'roomJoined':
+          setIsJoiningRoom(false);
+          setCurrentRoom(message.data.room);
+          toast.success(`Joined room "${message.data.room.name}"`);
+          break;
+
+        case 'roomUpdated':
+          setCurrentRoom(message.data.room);
+          if (message.data.room.players.every((player: RoomPlayer) => player.isReady)) {
+            toast.info('All players are ready! Starting game...');
+          }
+          break;
+
+        case 'roomError':
+          setIsCreatingRoom(false);
+          setIsJoiningRoom(false);
+          toast.error(message.data.message);
+          break;
+
+        case 'gameStarted':
+          setIsPlaying(true);
+          setGameOver(false);
+          toast.success('Game started!');
+          break;
       }
     };
 
@@ -151,7 +186,6 @@ export const useGameWebSocket = () => {
       console.log('Disconnected from server');
       toast.error('Disconnected from game server');
       
-      // Attempt to reconnect with exponential backoff
       if (reconnectAttempts < 5) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
         console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
@@ -202,16 +236,86 @@ export const useGameWebSocket = () => {
     }));
   };
 
-  const startGame = (playerName: string) => {
+  const startGame = (name: string) => {
     if (!wsRef.current || !playerId) return;
+    
+    setPlayerName(name);
     
     wsRef.current.send(JSON.stringify({
       type: 'spawn',
-      playerName,
+      playerName: name,
       playerId
     }));
     
     setIsPlaying(true);
+  };
+
+  const getRoomsList = () => {
+    if (!wsRef.current || !playerId) return;
+
+    wsRef.current.send(JSON.stringify({
+      type: 'getRooms',
+      playerId
+    }));
+  };
+
+  const createRoom = (name: string, visibility: 'public' | 'private', maxPlayers: number) => {
+    if (!wsRef.current || !playerId || !playerName) {
+      toast.error('Please enter your name first');
+      return;
+    }
+
+    setIsCreatingRoom(true);
+    
+    console.log('Creating room:', { name, visibility, maxPlayers, playerId, playerName });
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'createRoom',
+      playerId,
+      playerName,
+      roomName: name,
+      visibility,
+      maxPlayers
+    }));
+  };
+
+  const joinRoom = (roomId: string) => {
+    if (!wsRef.current || !playerId || !playerName) {
+      toast.error('Please enter your name first');
+      return;
+    }
+
+    setIsJoiningRoom(true);
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'joinRoom',
+      playerId,
+      playerName,
+      roomId
+    }));
+  };
+
+  const leaveRoom = () => {
+    if (!wsRef.current || !playerId || !currentRoom) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'leaveRoom',
+      playerId,
+      roomId: currentRoom.id
+    }));
+    
+    setCurrentRoom(null);
+  };
+
+  const setPlayerReady = (isReady: boolean) => {
+    if (!wsRef.current || !playerId || !currentRoom) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'setReady',
+      playerId,
+      roomId: currentRoom.id,
+      isReady
+    }));
   };
 
   useEffect(() => {
@@ -244,12 +348,24 @@ export const useGameWebSocket = () => {
     isPlaying,
     isMinimapVisible,
     minimapTimeLeft,
+    playerName,
+    setPlayerName,
     sendDirection,
     sendUpdate,
     sendSpeedBoost,
     startGame,
     setGameOver,
-    setIsPlaying
+    setIsPlaying,
+    
+    rooms,
+    currentRoom,
+    isCreatingRoom,
+    isJoiningRoom,
+    getRoomsList,
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    setPlayerReady
   };
 };
 
