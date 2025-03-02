@@ -48,16 +48,21 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
       .catch(() => toast.error("Failed to copy"));
   };
   
-  // Add auto-refresh effect for room data
+  // Add auto-refresh effect for room data with a faster interval
   useEffect(() => {
     if (onRefreshRoom) {
       // Immediate refresh when component mounts
       onRefreshRoom();
       
-      // Regular refresh interval
+      // Additional immediate refreshes to ensure data is up-to-date
+      setTimeout(() => onRefreshRoom(), 200);
+      setTimeout(() => onRefreshRoom(), 500);
+      setTimeout(() => onRefreshRoom(), 1000);
+      
+      // Regular refresh interval - more frequent to catch updates
       const refreshInterval = setInterval(() => {
         onRefreshRoom();
-      }, 2000); // Refresh every 2 seconds
+      }, 1000); // Refresh every 1 second (changed from 2 seconds)
       
       return () => clearInterval(refreshInterval);
     }
@@ -114,7 +119,12 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
             variant="secondary"
             size="sm"
             className="flex items-center gap-1"
-            onClick={onRefreshRoom}
+            onClick={() => {
+              onRefreshRoom();
+              // Additional refreshes to ensure data is up-to-date
+              setTimeout(() => onRefreshRoom(), 200);
+              setTimeout(() => onRefreshRoom(), 500);
+            }}
           >
             <RefreshCw className="h-3.5 w-3.5" />
             <span className="text-xs">Refresh</span>
@@ -153,10 +163,13 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
         <Button 
           onClick={() => {
             onToggleReady();
-            // Also trigger a refresh immediately after toggling ready
+            // Trigger multiple refreshes after toggling ready to ensure UI updates
             if (onRefreshRoom) {
-              setTimeout(onRefreshRoom, 100);
-              setTimeout(onRefreshRoom, 500);
+              onRefreshRoom(); // Immediate refresh
+              setTimeout(() => onRefreshRoom(), 100);
+              setTimeout(() => onRefreshRoom(), 300);
+              setTimeout(() => onRefreshRoom(), 600);
+              setTimeout(() => onRefreshRoom(), 1000);
             }
           }}
           className={isReady ? "bg-gray-600 hover:bg-gray-700" : "bg-green-600 hover:bg-green-700 flex-1"}

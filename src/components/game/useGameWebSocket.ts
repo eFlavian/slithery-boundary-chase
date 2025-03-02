@@ -268,6 +268,14 @@ export const useGameWebSocket = () => {
               if (currentRoomIdNormalized === updateRoomIdNormalized) {
                 console.log('Room update received, updating players:', message.data.players);
                 
+                // Check if the current player's ready status has changed
+                if (playerId) {
+                  const playerInUpdate = message.data.players.find((p: Player) => p.id === playerId);
+                  if (playerInUpdate) {
+                    setIsReady(playerInUpdate.isReady);
+                  }
+                }
+                
                 setCurrentRoom(prevRoom => {
                   if (!prevRoom) return null;
                   return {
@@ -278,7 +286,8 @@ export const useGameWebSocket = () => {
                 
                 setAllPlayersReady(message.data.allPlayersReady);
                 
-                setTimeout(() => requestRoomUpdate(), 300);
+                // Request another update to keep data fresh
+                setTimeout(() => requestRoomUpdate(), 200);
               }
             }
             break;
@@ -287,7 +296,8 @@ export const useGameWebSocket = () => {
             if (currentRoom) {
               toast.info(`${message.data.playerName} left the room`);
               requestRoomUpdate();
-              setTimeout(() => requestRoomUpdate(), 300);
+              setTimeout(() => requestRoomUpdate(), 200);
+              setTimeout(() => requestRoomUpdate(), 500);
             }
             break;
 
@@ -295,7 +305,9 @@ export const useGameWebSocket = () => {
             if (currentRoom) {
               toast.info(`${message.data.playerName} joined the room`);
               requestRoomUpdate();
-              setTimeout(() => requestRoomUpdate(), 300);
+              setTimeout(() => requestRoomUpdate(), 200);
+              setTimeout(() => requestRoomUpdate(), 500);
+              setTimeout(() => requestRoomUpdate(), 1000);
             }
             break;
 
@@ -390,11 +402,13 @@ export const useGameWebSocket = () => {
       clearInterval(roomUpdateTimerRef.current);
     }
     
+    // Immediate refresh
     requestRoomUpdate();
     
+    // Setting a faster interval for more responsive updates
     roomUpdateTimerRef.current = window.setInterval(() => {
       requestRoomUpdate();
-    }, 250);
+    }, 200); // Changed from 250ms to 200ms for more frequent updates
   };
 
   const requestRoomUpdate = () => {
@@ -471,10 +485,13 @@ export const useGameWebSocket = () => {
       return false;
     }
     
+    // Use player name as part of room name if roomName is empty
+    const finalRoomName = roomName.trim() || `${playerName}'s room`;
+    
     const request = {
       type: 'createRoom',
       playerId,
-      roomName,
+      roomName: finalRoomName,
       isPublic,
       maxPlayers,
       generateSimpleCode: true,
@@ -562,6 +579,7 @@ export const useGameWebSocket = () => {
       : `room_${currentRoom.id.toLowerCase()}`;
     
     try {
+      console.log(`Toggling ready state to: ${newReadyState}`);
       wsRef.current.send(JSON.stringify({
         type: 'toggleReady',
         playerId,
@@ -569,12 +587,14 @@ export const useGameWebSocket = () => {
         isReady: newReadyState
       }));
       
+      // Temporarily update local state immediately for better UX
       setIsReady(newReadyState);
       
+      // Request multiple room updates to ensure state is synchronized
       requestRoomUpdate();
-      
-      setTimeout(() => requestRoomUpdate(), 200);
-      setTimeout(() => requestRoomUpdate(), 500);
+      setTimeout(() => requestRoomUpdate(), 100);
+      setTimeout(() => requestRoomUpdate(), 300);
+      setTimeout(() => requestRoomUpdate(), 600);
       setTimeout(() => requestRoomUpdate(), 1000);
     } catch (error) {
       console.error('Error toggling ready state:', error);
