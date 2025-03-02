@@ -1,18 +1,24 @@
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Map, Zap } from 'lucide-react';
-import { Position, Player } from '@/lib/gameTypes';
-import { CELL_SIZE, MIN_SNAKE_OPACITY, INACTIVE_PLAYER_OPACITY } from '@/lib/gameConstants';
+
+type Position = {
+  x: number;
+  y: number;
+};
 
 type GameCanvasProps = {
-  players: Player[];
+  players: any[];
   foods: any[];
   yellowDots: Position[];
   portals: Position[];
   playerId: string | null;
   CELL_SIZE: number;
   GRID_SIZE: number;
-  currentPlayer: Player | undefined;
+  MIN_SNAKE_OPACITY: number;
+  INACTIVE_PLAYER_OPACITY: number;
+  getViewportTransform: (snakeHead: Position) => string;
+  currentPlayer: any;
 };
 
 const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -21,7 +27,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   yellowDots,
   portals,
   playerId,
+  CELL_SIZE,
   GRID_SIZE,
+  MIN_SNAKE_OPACITY,
+  INACTIVE_PLAYER_OPACITY,
+  getViewportTransform,
   currentPlayer
 }) => {
   // Create hash pattern for the grid background
@@ -53,6 +63,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           style={{
             width: GRID_SIZE * CELL_SIZE,
             height: GRID_SIZE * CELL_SIZE,
+            transform: currentPlayer?.snake?.[0] ?
+              getViewportTransform(currentPlayer.snake[0]) :
+              'translate3d(0, 0, 0)',
             willChange: 'transform',
             transition: 'transform 150ms linear'
           }}

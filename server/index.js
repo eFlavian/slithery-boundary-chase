@@ -1,7 +1,6 @@
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import express from 'express';
-import { nanoid } from 'nanoid';
 
 const app = express();
 const server = createServer(app);
@@ -12,10 +11,7 @@ const gameState = {
   foods: [],
   yellowDots: [],
   portals: [],
-  playerCount: 0,
-  // Session management
-  sessions: new Map(),
-  clientToPlayer: new Map() // maps WebSocket clients to player IDs
+  playerCount: 0
 };
 
 const GRID_SIZE = 256;
@@ -27,8 +23,6 @@ const FOOD_SPAWN_INTERVAL = 5000;
 const PORTAL_SPAWN_INTERVAL = 20000;
 const YELLOW_DOT_SPAWN_INTERVAL = 60000;
 const MINIMAP_DURATION = 20; // Changed from 10 to 20 seconds
-const SESSION_CODE_LENGTH = 6; // Length of session codes
-const MAX_PLAYERS_PER_SESSION = 10; // Maximum players per session
 
 function getRandomPosition() {
   return {
@@ -129,233 +123,6 @@ function handleCollision(playerId, newHead) {
   return { collision: false };
 }
 
-// Session management functions
-function createGameSession(playerId, isPrivate = false) {
-  const player = gameState.players.get(playerId);
-  if (!player) return null;
-  
-  // Generate a unique session ID (6 character alphanumeric code)
-  const sessionId = nanoid(SESSION_CODE_LENGTH).toUpperCase();
-  
-  const newSession = {
-    id: sessionId,
-    hostId: playerId,
-    hostName: player.name,
-    players: [{
-      id: playerId,
-      name: player.name,
-      isHost: true,
-      isReady: false
-    }],
-    isPrivate: isPrivate,
-    isActive: true,
-    startTime: null
-  };
-  
-  // Associate player with this session
-  player.sessionId = sessionId;
-  
-  // Store the session
-  gameState.sessions.set(sessionId, newSession);
-  
-  return sessionId;
-}
-
-function joinGameSession(playerId, sessionId) {
-  const player = gameState.players.get(playerId);
-  const session = gameState.sessions.get(sessionId);
-  
-  if (!player) return { success: false, message: 'Player not found' };
-  if (!session) return { success: false, message: 'Session not found' };
-  if (!session.isActive) return { success: false, message: 'Session is no longer active' };
-  if (session.players.length >= MAX_PLAYERS_PER_SESSION) {
-    return { success: false, message: 'Session is full' };
-  }
-  
-  // Don't allow joining if game has already started
-  if (session.startTime) {
-    return { success: false, message: 'Game already in progress' };
-  }
-  
-  // Check if player is already in this session
-  if (player.sessionId === sessionId) {
-    return { success: true };
-  }
-  
-  // Remove player from any existing session
-  if (player.sessionId) {
-    leaveGameSession(playerId);
-  }
-  
-  // Add player to this session
-  session.players.push({
-    id: playerId,
-    name: player.name,
-    isHost: false,
-    isReady: false
-  });
-  
-  // Update player's session
-  player.sessionId = sessionId;
-  
-  return { 
-    success: true, 
-    isHost: session.hostId === playerId,
-    isPrivate: session.isPrivate,
-    hostName: session.hostName
-  };
-}
-
-function leaveGameSession(playerId) {
-  const player = gameState.players.get(playerId);
-  
-  if (!player || !player.sessionId) return false;
-  
-  const sessionId = player.sessionId;
-  const session = gameState.sessions.get(sessionId);
-  
-  if (!session) return false;
-  
-  // Remove player from session players array
-  const playerIndex = session.players.findIndex(p => p.id === playerId);
-  if (playerIndex !== -1) {
-    session.players.splice(playerIndex, 1);
-  }
-  
-  // Clear player's session
-  player.sessionId = null;
-  
-  // If host leaves, either assign a new host or close the session
-  if (session.hostId === playerId) {
-    if (session.players.length > 0) {
-      // Assign the next player as host
-      const newHost = session.players[0];
-      session.hostId = newHost.id;
-      session.hostName = newHost.name;
-      newHost.isHost = true;
-    } else {
-      // No players left, close the session
-      gameState.sessions.delete(sessionId);
-      return { closed: true };
-    }
-  }
-  
-  return { closed: false, newHost: session.hostId };
-}
-
-function setPlayerReadyStatus(playerId, sessionId, isReady) {
-  const session = gameState.sessions.get(sessionId);
-  if (!session) return null;
-  
-  const playerInSession = session.players.find(p => p.id === playerId);
-  if (!playerInSession) return null;
-  
-  playerInSession.isReady = isReady;
-  
-  // Check if all players are ready to start the game
-  const allReady = session.players.length > 0 && 
-                  session.players.every(player => player.isReady);
-  
-  return { allReady };
-}
-
-function toggleSessionPrivacy(playerId, sessionId) {
-  const session = gameState.sessions.get(sessionId);
-  
-  if (!session || session.hostId !== playerId) return false;
-  
-  session.isPrivate = !session.isPrivate;
-  
-  return session.isPrivate;
-}
-
-function getPublicSessions() {
-  return Array.from(gameState.sessions.values())
-    .filter(session => !session.isPrivate && session.isActive && !session.startTime)
-    .map(session => ({
-      id: session.id,
-      hostName: session.hostName,
-      players: session.players
-    }));
-}
-
-function startSessionGame(sessionId) {
-  const session = gameState.sessions.get(sessionId);
-  if (!session) return;
-  
-  // Set session as started
-  session.startTime = Date.now();
-  
-  // Set all players in this session to isPlaying
-  session.players.forEach(sessionPlayer => {
-    const player = gameState.players.get(sessionPlayer.id);
-    if (player) {
-      // Reset player state for game start
-      const spawnPosition = getRandomUnoccupiedPosition();
-      player.snake = [spawnPosition];
-      player.direction = 'RIGHT';
-      player.score = 0;
-      player.speedBoostPercentage = 0;
-      player.isPlaying = true;
-    }
-  });
-  
-  // Broadcast to all clients in this session
-  const playersInSession = session.players.map(p => p.id);
-  wss.clients.forEach(client => {
-    const clientPlayerId = gameState.clientToPlayer.get(client);
-    if (client.readyState === 1 && clientPlayerId && playersInSession.includes(clientPlayerId)) {
-      client.send(JSON.stringify({
-        type: 'gameStarting',
-        data: { sessionId }
-      }));
-    }
-  });
-}
-
-function broadcastSessionPlayerUpdate(sessionId) {
-  const session = gameState.sessions.get(sessionId);
-  if (!session) return;
-  
-  // Get the current session players
-  const sessionPlayers = session.players;
-  
-  // Broadcast to all clients in this session
-  const playersInSession = sessionPlayers.map(p => p.id);
-  wss.clients.forEach(client => {
-    const clientPlayerId = gameState.clientToPlayer.get(client);
-    if (client.readyState === 1 && clientPlayerId && playersInSession.includes(clientPlayerId)) {
-      client.send(JSON.stringify({
-        type: 'sessionPlayerUpdate',
-        data: { players: sessionPlayers }
-      }));
-    }
-  });
-  
-  // Check if all players are ready, and if so, start the game after a short delay
-  const allReady = sessionPlayers.length > 0 && sessionPlayers.every(p => p.isReady);
-  
-  if (allReady && !session.startTime) {
-    // Give players a 3-second countdown before starting
-    setTimeout(() => {
-      startSessionGame(sessionId);
-    }, 3000);
-  }
-}
-
-function broadcastPublicSessionsUpdate() {
-  const publicSessions = getPublicSessions();
-  
-  wss.clients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(JSON.stringify({
-        type: 'publicSessionsUpdate',
-        data: { sessions: publicSessions }
-      }));
-    }
-  });
-}
-
 function initializeGame() {
   for (let i = 0; i < INITIAL_NORMAL_FOOD; i++) {
     spawnFood();
@@ -372,9 +139,6 @@ function initializeGame() {
   setInterval(spawnFood, FOOD_SPAWN_INTERVAL);
   setInterval(spawnPortal, PORTAL_SPAWN_INTERVAL);
   setInterval(spawnYellowDot, YELLOW_DOT_SPAWN_INTERVAL);
-  
-  // Periodically broadcast public sessions update
-  setInterval(broadcastPublicSessionsUpdate, 5000);
 }
 
 function broadcastGameState() {
@@ -412,9 +176,6 @@ function broadcastGameState() {
 wss.on('connection', (ws) => {
   const playerId = `player${++gameState.playerCount}`;
   
-  // Store client-to-player mapping
-  gameState.clientToPlayer.set(ws, playerId);
-  
   const spawnPosition = getRandomUnoccupiedPosition();
   
   gameState.players.set(playerId, {
@@ -427,8 +188,7 @@ wss.on('connection', (ws) => {
     isPlaying: false,
     minimapVisible: false,
     minimapTimer: null,
-    minimapTimeLeft: 0, // Track time left on minimap
-    sessionId: null // Track which session this player belongs to
+    minimapTimeLeft: 0 // Track time left on minimap
   });
 
   ws.send(JSON.stringify({
@@ -564,121 +324,6 @@ wss.on('connection', (ws) => {
           player.speedBoostPercentage = Math.max(0, player.speedBoostPercentage - 0.5);
         }
         break;
-        
-      // Session management handlers
-      case 'createSession':
-        const sessionId = createGameSession(data.playerId, data.isPrivate);
-        if (sessionId) {
-          ws.send(JSON.stringify({
-            type: 'sessionCreated',
-            data: { 
-              sessionId,
-              isPrivate: data.isPrivate
-            }
-          }));
-          
-          // Broadcast updated public sessions
-          broadcastPublicSessionsUpdate();
-        }
-        break;
-        
-      case 'joinSession':
-        const joinResult = joinGameSession(data.playerId, data.sessionId);
-        
-        if (joinResult.success) {
-          ws.send(JSON.stringify({
-            type: 'sessionJoined',
-            data: { 
-              sessionId: data.sessionId,
-              isHost: joinResult.isHost,
-              isPrivate: joinResult.isPrivate,
-              hostName: joinResult.hostName
-            }
-          }));
-          
-          // Broadcast session player update to all in session
-          broadcastSessionPlayerUpdate(data.sessionId);
-        } else {
-          ws.send(JSON.stringify({
-            type: 'sessionJoinError',
-            data: { message: joinResult.message }
-          }));
-        }
-        break;
-        
-      case 'leaveSession':
-        const leaveResult = leaveGameSession(data.playerId);
-        
-        if (leaveResult) {
-          if (leaveResult.closed) {
-            // Session was closed (host left and no players)
-            // Nothing more to do
-          } else {
-            // Broadcast session player update to all remaining in session
-            broadcastSessionPlayerUpdate(data.sessionId);
-            
-            // If there's a new host, notify them
-            if (leaveResult.newHost) {
-              const newHostClient = Array.from(gameState.clientToPlayer.entries())
-                .find(([_, pid]) => pid === leaveResult.newHost)?.[0];
-                
-              if (newHostClient && newHostClient.readyState === 1) {
-                newHostClient.send(JSON.stringify({
-                  type: 'becameHost',
-                  data: { sessionId: data.sessionId }
-                }));
-              }
-            }
-          }
-          
-          // Broadcast updated public sessions
-          broadcastPublicSessionsUpdate();
-        }
-        break;
-        
-      case 'setReady':
-        const readyResult = setPlayerReadyStatus(data.playerId, data.sessionId, data.isReady);
-        
-        if (readyResult) {
-          // Update all players in the session about this change
-          broadcastSessionPlayerUpdate(data.sessionId);
-        }
-        break;
-        
-      case 'setSessionPrivacy':
-        const isPrivate = toggleSessionPrivacy(data.playerId, data.sessionId);
-        
-        if (isPrivate !== null) {
-          // Broadcast to all in session about privacy change
-          const session = gameState.sessions.get(data.sessionId);
-          
-          if (session) {
-            const playersInSession = session.players.map(p => p.id);
-            
-            wss.clients.forEach(client => {
-              const clientPlayerId = gameState.clientToPlayer.get(client);
-              if (client.readyState === 1 && clientPlayerId && playersInSession.includes(clientPlayerId)) {
-                client.send(JSON.stringify({
-                  type: 'privacyChanged',
-                  data: { isPrivate }
-                }));
-              }
-            });
-            
-            // Broadcast updated public sessions if status changed
-            broadcastPublicSessionsUpdate();
-          }
-        }
-        break;
-        
-      case 'getPublicSessions':
-        const publicSessions = getPublicSessions();
-        
-        ws.send(JSON.stringify({
-          type: 'publicSessionsUpdate',
-          data: { sessions: publicSessions }
-        }));
-        break;
     }
 
     broadcastGameState();
@@ -686,50 +331,13 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     const player = gameState.players.get(playerId);
-    
-    if (player) {
-      // Clear any timers
-      if (player.minimapTimer) {
-        clearTimeout(player.minimapTimer);
-      }
-      
-      // If player was in a session, remove them
-      if (player.sessionId) {
-        leaveGameSession(playerId);
-        broadcastSessionPlayerUpdate(player.sessionId);
-      }
-      
-      // Remove player
-      gameState.players.delete(playerId);
+    if (player && player.minimapTimer) {
+      clearTimeout(player.minimapTimer);
     }
-    
-    // Remove client-to-player mapping
-    gameState.clientToPlayer.delete(ws);
-    
+    gameState.players.delete(playerId);
     broadcastGameState();
-    // Also update public sessions
-    broadcastPublicSessionsUpdate();
   });
 });
-
-// Install nanoid for generating unique session IDs
-try {
-  import('nanoid');
-} catch (e) {
-  console.log('Installing nanoid package...');
-  await new Promise((resolve, reject) => {
-    const { exec } = require('child_process');
-    exec('npm install nanoid', (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error installing nanoid: ${error}`);
-        reject(error);
-        return;
-      }
-      console.log(`nanoid installed successfully`);
-      resolve();
-    });
-  });
-}
 
 initializeGame();
 
