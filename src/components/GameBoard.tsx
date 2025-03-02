@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import ThemeToggle from './game/ThemeToggle';
@@ -31,6 +30,8 @@ const INACTIVE_PLAYER_OPACITY = 0.2;
 const GameBoard: React.FC = () => {
   const {
     playerId,
+    playerName, // Use the playerName from the hook
+    setPlayerName, // Use the setter from the hook
     players,
     foods,
     yellowDots,
@@ -55,12 +56,12 @@ const GameBoard: React.FC = () => {
     joinRoom,
     leaveRoom,
     toggleReady,
-    startRoomGame
+    startRoomGame,
+    requestRoomUpdate
   } = useGameWebSocket();
 
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
-  const [playerName, setPlayerName] = useState('');
   
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
@@ -254,6 +255,7 @@ const GameBoard: React.FC = () => {
           onLeaveRoom={leaveRoom}
           onToggleReady={toggleReady}
           onStartGame={startRoomGame}
+          onRefreshRoom={requestRoomUpdate}
         />
       )}
 

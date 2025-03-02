@@ -27,6 +27,7 @@ type Player = {
 
 export const useGameWebSocket = () => {
   const [playerId, setPlayerId] = useState<string | null>(null);
+  const [playerName, setPlayerName] = useState<string>(''); // Added playerName state
   const [players, setPlayers] = useState<any[]>([]);
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [yellowDots, setYellowDots] = useState<Position[]>([]);
@@ -460,12 +461,14 @@ export const useGameWebSocket = () => {
     }));
   };
 
-  const startGame = (playerName: string) => {
+  const startGame = (name: string) => {
     if (!wsRef.current || !playerId) return;
+    
+    setPlayerName(name);
     
     wsRef.current.send(JSON.stringify({
       type: 'spawn',
-      playerName,
+      playerName: name,
       playerId
     }));
     
@@ -628,6 +631,12 @@ export const useGameWebSocket = () => {
   useEffect(() => {
     const cleanupFn = connectToServer();
     
+    // Load player name from localStorage if available
+    const savedName = localStorage.getItem('playerName');
+    if (savedName) {
+      setPlayerName(savedName);
+    }
+    
     return () => {
       cleanupFn();
       wsRef.current?.close();
@@ -696,6 +705,7 @@ export const useGameWebSocket = () => {
 
   return {
     playerId,
+    playerName,
     players,
     foods,
     yellowDots,
@@ -710,6 +720,7 @@ export const useGameWebSocket = () => {
     startGame,
     setGameOver,
     setIsPlaying,
+    setPlayerName,
     publicRooms,
     currentRoom,
     isHost,
