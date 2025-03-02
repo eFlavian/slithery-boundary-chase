@@ -32,7 +32,12 @@ const RoomsList: React.FC<RoomsListProps> = ({ rooms, onJoinRoom, onCreateRoom, 
   const handleManualJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (manualRoomCode.trim()) {
-      onJoinRoom(manualRoomCode.trim());
+      // Remove any "room_" prefix if user mistakenly included it
+      const cleanCode = manualRoomCode.trim().startsWith('room_') 
+        ? manualRoomCode.trim().substring(5) 
+        : manualRoomCode.trim();
+        
+      onJoinRoom(cleanCode);
     } else {
       toast.error("Please enter a room code");
     }

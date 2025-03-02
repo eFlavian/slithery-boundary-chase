@@ -192,7 +192,11 @@ export const useGameWebSocket = () => {
             break;
 
           case 'publicRooms':
-            setPublicRooms(message.data.rooms);
+            const formattedRooms = message.data.rooms.map(room => ({
+              ...room,
+              id: room.id.startsWith('room_') ? room.id.substring(5).toUpperCase() : room.id.toUpperCase()
+            }));
+            setPublicRooms(formattedRooms);
             break;
 
           case 'roomCreated':
@@ -208,7 +212,8 @@ export const useGameWebSocket = () => {
             let roomIdToUse = message.data.roomId;
             if (roomIdToUse.startsWith('room_')) {
               roomIdToUse = roomIdToUse.substring(5).toUpperCase();
-              console.log('Modified room ID to:', roomIdToUse);
+            } else {
+              roomIdToUse = roomIdToUse.toUpperCase();
             }
             
             const newRoom = {
@@ -229,8 +234,12 @@ export const useGameWebSocket = () => {
             break;
 
           case 'roomJoined':
+            const joinedRoomId = message.data.roomId.startsWith('room_') 
+              ? message.data.roomId.substring(5).toUpperCase() 
+              : message.data.roomId.toUpperCase();
+              
             setCurrentRoom({
-              id: message.data.roomId,
+              id: joinedRoomId,
               name: message.data.roomName,
               isPublic: message.data.isPublic,
               players: message.data.players
@@ -243,12 +252,19 @@ export const useGameWebSocket = () => {
             break;
 
           case 'roomUpdate':
-            if (currentRoom && message.data.roomId === currentRoom.id) {
-              setCurrentRoom({
-                ...currentRoom,
-                players: message.data.players
-              });
-              setAllPlayersReady(message.data.allPlayersReady);
+            if (currentRoom) {
+              const currentRoomIdNormalized = currentRoom.id.toUpperCase();
+              const updateRoomIdNormalized = message.data.roomId.startsWith('room_')
+                ? message.data.roomId.substring(5).toUpperCase()
+                : message.data.roomId.toUpperCase();
+                
+              if (currentRoomIdNormalized === updateRoomIdNormalized) {
+                setCurrentRoom({
+                  ...currentRoom,
+                  players: message.data.players
+                });
+                setAllPlayersReady(message.data.allPlayersReady);
+              }
             }
             break;
 
@@ -464,8 +480,10 @@ export const useGameWebSocket = () => {
     
     const formattedRoomId = roomId.startsWith('room_') 
       ? roomId 
-      : roomId;
+      : `room_${roomId.toLowerCase()}`;
       
+    console.log(`Joining room with ID: ${formattedRoomId}`);
+    
     wsRef.current.send(JSON.stringify({
       type: 'joinRoom',
       playerId,
