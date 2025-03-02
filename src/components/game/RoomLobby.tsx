@@ -1,8 +1,8 @@
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Copy, Check, Share2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Player = {
@@ -23,7 +23,6 @@ type RoomLobbyProps = {
   onToggleReady: () => void;
   onStartGame: () => void;
   onLeaveRoom: () => void;
-  onRequestUpdate?: () => void;
 };
 
 const RoomLobby: React.FC<RoomLobbyProps> = ({
@@ -37,29 +36,14 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
   onToggleReady,
   onStartGame,
   onLeaveRoom,
-  onRequestUpdate,
 }) => {
   // Generate a shareable link with the room ID
   const shareableLink = `${window.location.origin}?room=${roomId}`;
-
-  // Request room update when component mounts
-  useEffect(() => {
-    if (onRequestUpdate) {
-      onRequestUpdate();
-    }
-  }, [onRequestUpdate]);
 
   const copyToClipboard = (text: string, message: string) => {
     navigator.clipboard.writeText(text)
       .then(() => toast.success(message))
       .catch(() => toast.error("Failed to copy"));
-  };
-
-  const handleRefresh = () => {
-    if (onRequestUpdate) {
-      onRequestUpdate();
-      toast.info("Refreshing player list...");
-    }
   };
 
   return (
@@ -104,19 +88,6 @@ const RoomLobby: React.FC<RoomLobbyProps> = ({
             <span>Share Link</span>
           </Button>
         </div>
-      </div>
-      
-      <div className="flex justify-between items-center mb-2">
-        <h4 className="text-sm font-medium text-white/80">Players</h4>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={handleRefresh}
-          className="flex items-center gap-1 text-xs"
-        >
-          <RefreshCw className="h-3 w-3" />
-          Refresh
-        </Button>
       </div>
       
       <div className="space-y-2 max-h-40 overflow-y-auto mb-6">

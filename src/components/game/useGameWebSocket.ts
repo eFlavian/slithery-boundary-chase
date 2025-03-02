@@ -56,7 +56,6 @@ export const useGameWebSocket = () => {
   const lastSocketMessageRef = useRef<number>(Date.now());
   const pendingRoomCreationRef = useRef<boolean>(false);
   const roomUpdateTimerRef = useRef<number>();
-  const lastRoomUpdateRef = useRef<number>(Date.now());
 
   const connectToServer = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -250,8 +249,6 @@ export const useGameWebSocket = () => {
             toast.success(`Joined room "${message.data.roomName}"`);
             
             startRoomUpdateInterval();
-            
-            requestRoomUpdate();
             break;
 
           case 'roomUpdate':
@@ -262,16 +259,11 @@ export const useGameWebSocket = () => {
                 : message.data.roomId.toUpperCase();
                 
               if (currentRoomIdNormalized === updateRoomIdNormalized) {
-                console.log('Room update received:', message.data);
-                
                 setCurrentRoom({
                   ...currentRoom,
                   players: message.data.players
                 });
-                
                 setAllPlayersReady(message.data.allPlayersReady);
-                
-                lastRoomUpdateRef.current = Date.now();
               }
             }
             break;
@@ -279,7 +271,6 @@ export const useGameWebSocket = () => {
           case 'playerLeft':
             if (currentRoom) {
               toast.info(`${message.data.playerName} left the room`);
-              
               requestRoomUpdate();
             }
             break;
@@ -287,16 +278,6 @@ export const useGameWebSocket = () => {
           case 'playerJoined':
             if (currentRoom) {
               toast.info(`${message.data.playerName} joined the room`);
-              
-              requestRoomUpdate();
-            }
-            break;
-
-          case 'playerReadyChanged':
-            if (currentRoom) {
-              const readyStatus = message.data.isReady ? 'ready' : 'not ready';
-              toast.info(`${message.data.playerName} is ${readyStatus}`);
-              
               requestRoomUpdate();
             }
             break;
@@ -375,11 +356,6 @@ export const useGameWebSocket = () => {
         }
       }
       
-      if (currentRoom && playerId && (now - lastRoomUpdateRef.current > 5000)) {
-        console.log('Requesting room update due to stale data');
-        requestRoomUpdate();
-      }
-      
       if (pendingRoomCreationRef.current && timeSinceLastMessage > 60000) {
         console.log('Room creation appears to have failed after 60 seconds');
         pendingRoomCreationRef.current = false;
@@ -399,29 +375,17 @@ export const useGameWebSocket = () => {
     
     roomUpdateTimerRef.current = window.setInterval(() => {
       requestRoomUpdate();
-    }, 2000);
-    
-    lastRoomUpdateRef.current = Date.now();
+    }, 3000);
   };
 
   const requestRoomUpdate = () => {
     if (!wsRef.current || !playerId || !currentRoom) return;
     
-    if (wsRef.current.readyState === WebSocket.OPEN) {
-      console.log('Requesting room update for room:', currentRoom.id);
-      
-      const serverRoomId = currentRoom.id.startsWith('room_') 
-        ? currentRoom.id
-        : `room_${currentRoom.id.toLowerCase()}`;
-      
-      wsRef.current.send(JSON.stringify({
-        type: 'getRoomUpdate',
-        playerId,
-        roomId: serverRoomId
-      }));
-    } else {
-      console.warn('Cannot request room update: WebSocket not in OPEN state');
-    }
+    wsRef.current.send(JSON.stringify({
+      type: 'getRoomUpdate',
+      playerId,
+      roomId: currentRoom.id
+    }));
   };
 
   const sendDirection = (direction: Direction) => {
@@ -534,14 +498,10 @@ export const useGameWebSocket = () => {
       clearInterval(roomUpdateTimerRef.current);
     }
     
-    const serverRoomId = currentRoom.id.startsWith('room_') 
-      ? currentRoom.id
-      : `room_${currentRoom.id.toLowerCase()}`;
-    
     wsRef.current.send(JSON.stringify({
       type: 'leaveRoom',
       playerId,
-      roomId: serverRoomId
+      roomId: currentRoom.id
     }));
     
     setCurrentRoom(null);
@@ -554,16 +514,10 @@ export const useGameWebSocket = () => {
     
     const newReadyState = !isReady;
     
-    const serverRoomId = currentRoom.id.startsWith('room_') 
-      ? currentRoom.id
-      : `room_${currentRoom.id.toLowerCase()}`;
-    
-    console.log(`Setting ready state to ${newReadyState} for room ${serverRoomId}`);
-    
     wsRef.current.send(JSON.stringify({
       type: 'toggleReady',
       playerId,
-      roomId: serverRoomId,
+      roomId: currentRoom.id,
       isReady: newReadyState
     }));
     
@@ -575,14 +529,10 @@ export const useGameWebSocket = () => {
   const startRoomGame = () => {
     if (!wsRef.current || !playerId || !currentRoom || !isHost || !allPlayersReady) return;
     
-    const serverRoomId = currentRoom.id.startsWith('room_') 
-      ? currentRoom.id
-      : `room_${currentRoom.id.toLowerCase()}`;
-    
     wsRef.current.send(JSON.stringify({
       type: 'startGame',
       playerId,
-      roomId: serverRoomId
+      roomId: currentRoom.id
     }));
   };
 
@@ -664,8 +614,7 @@ export const useGameWebSocket = () => {
     joinRoom,
     leaveRoom,
     toggleReady,
-    startRoomGame,
-    requestRoomUpdate
+    startRoomGame
   };
 };
 
