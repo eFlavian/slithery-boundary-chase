@@ -10,6 +10,22 @@ type Position = {
 type FoodType = 'normal' | 'special';
 type FoodItem = Position & { type: FoodType };
 
+type Room = {
+  id: string;
+  name: string;
+  playerCount: number;
+  maxPlayers: number;
+  isPublic: boolean;
+  host: string;
+};
+
+type Player = {
+  id: string;
+  name: string;
+  isReady: boolean;
+  isHost: boolean;
+};
+
 export const useGameWebSocket = () => {
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [players, setPlayers] = useState<any[]>([]);
@@ -21,6 +37,18 @@ export const useGameWebSocket = () => {
   const [isMinimapVisible, setIsMinimapVisible] = useState(false);
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  
+  // Room-related state
+  const [publicRooms, setPublicRooms] = useState<Room[]>([]);
+  const [currentRoom, setCurrentRoom] = useState<{
+    id: string;
+    name: string;
+    isPublic: boolean;
+    players: Player[];
+  } | null>(null);
+  const [isHost, setIsHost] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [allPlayersReady, setAllPlayersReady] = useState(false);
   
   const wsRef = useRef<WebSocket | null>(null);
   const minimapTimerRef = useRef<number>();
@@ -71,6 +99,10 @@ export const useGameWebSocket = () => {
           setGameOver(true);
           setIsPlaying(false);
           setIsMinimapVisible(false);
+          setCurrentRoom(null);
+          setIsHost(false);
+          setIsReady(false);
+          
           if (minimapTimerRef.current) {
             clearTimeout(minimapTimerRef.current);
           }
@@ -144,6 +176,67 @@ export const useGameWebSocket = () => {
             }
           }, message.data.duration * 1000);
           break;
+
+        // Room-related messages
+        case 'publicRooms':
+          setPublicRooms(message.data.rooms);
+          break;
+
+        case 'roomCreated':
+          setCurrentRoom({
+            id: message.data.roomId,
+            name: message.data.roomName,
+            isPublic: message.data.isPublic,
+            players: message.data.players
+          });
+          setIsHost(true);
+          toast.success(`Room "${message.data.roomName}" created`);
+          break;
+
+        case 'roomJoined':
+          setCurrentRoom({
+            id: message.data.roomId,
+            name: message.data.roomName,
+            isPublic: message.data.isPublic,
+            players: message.data.players
+          });
+          setIsHost(message.data.isHost);
+          toast.success(`Joined room "${message.data.roomName}"`);
+          break;
+
+        case 'roomUpdate':
+          if (currentRoom && message.data.roomId === currentRoom.id) {
+            setCurrentRoom({
+              ...currentRoom,
+              players: message.data.players
+            });
+            setAllPlayersReady(message.data.allPlayersReady);
+          }
+          break;
+
+        case 'playerLeft':
+          if (currentRoom) {
+            toast.info(`${message.data.playerName} left the room`);
+          }
+          break;
+
+        case 'playerJoined':
+          if (currentRoom) {
+            toast.info(`${message.data.playerName} joined the room`);
+          }
+          break;
+
+        case 'roomError':
+          toast.error(message.data.message);
+          break;
+
+        case 'gameStarting':
+          toast.success('Game starting in 3 seconds!');
+          setTimeout(() => {
+            setIsPlaying(true);
+            setGameOver(false);
+          }, 3000);
+          break;
       }
     };
 
@@ -214,6 +307,77 @@ export const useGameWebSocket = () => {
     setIsPlaying(true);
   };
 
+  // Room-related methods
+  const createRoom = (roomName: string, isPublic: boolean, maxPlayers: number) => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'createRoom',
+      playerId,
+      roomName,
+      isPublic,
+      maxPlayers
+    }));
+  };
+
+  const joinRoom = (roomId: string) => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'joinRoom',
+      playerId,
+      roomId
+    }));
+  };
+
+  const leaveRoom = () => {
+    if (!wsRef.current || !playerId || !currentRoom) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'leaveRoom',
+      playerId,
+      roomId: currentRoom.id
+    }));
+    
+    setCurrentRoom(null);
+    setIsHost(false);
+    setIsReady(false);
+  };
+
+  const toggleReady = () => {
+    if (!wsRef.current || !playerId || !currentRoom) return;
+    
+    const newReadyState = !isReady;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'toggleReady',
+      playerId,
+      roomId: currentRoom.id,
+      isReady: newReadyState
+    }));
+    
+    setIsReady(newReadyState);
+  };
+
+  const startRoomGame = () => {
+    if (!wsRef.current || !playerId || !currentRoom || !isHost || !allPlayersReady) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'startGame',
+      playerId,
+      roomId: currentRoom.id
+    }));
+  };
+
+  const requestPublicRooms = () => {
+    if (!wsRef.current || !playerId) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'getPublicRooms',
+      playerId
+    }));
+  };
+
   useEffect(() => {
     connectToServer();
     
@@ -234,6 +398,20 @@ export const useGameWebSocket = () => {
     };
   }, []);
 
+  // Periodically request public rooms
+  useEffect(() => {
+    if (playerId && !currentRoom && !isPlaying) {
+      const interval = setInterval(() => {
+        requestPublicRooms();
+      }, 5000);
+      
+      // Initial request
+      requestPublicRooms();
+      
+      return () => clearInterval(interval);
+    }
+  }, [playerId, currentRoom, isPlaying]);
+
   return {
     playerId,
     players,
@@ -249,7 +427,18 @@ export const useGameWebSocket = () => {
     sendSpeedBoost,
     startGame,
     setGameOver,
-    setIsPlaying
+    setIsPlaying,
+    // Room-related
+    publicRooms,
+    currentRoom,
+    isHost,
+    isReady,
+    allPlayersReady,
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    toggleReady,
+    startRoomGame
   };
 };
 

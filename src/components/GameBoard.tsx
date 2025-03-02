@@ -8,7 +8,7 @@ import Minimap from './game/Minimap';
 import PlayerScore from './game/PlayerScore';
 import Leaderboard from './game/Leaderboard';
 import SpeedBoost from './game/SpeedBoost';
-import StartScreen from './game/StartScreen';
+import MainMenu from './game/MainMenu';
 import GameCanvas from './game/GameCanvas';
 import useGameWebSocket from './game/useGameWebSocket';
 
@@ -44,7 +44,18 @@ const GameBoard: React.FC = () => {
     sendSpeedBoost,
     startGame,
     setGameOver,
-    setIsPlaying
+    setIsPlaying,
+    // Room-related
+    publicRooms,
+    currentRoom,
+    isHost,
+    isReady,
+    allPlayersReady,
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    toggleReady,
+    startRoomGame
   } = useGameWebSocket();
 
   const [direction, setDirection] = useState<Direction>('RIGHT');
@@ -229,10 +240,20 @@ const GameBoard: React.FC = () => {
       <ThemeToggle />
 
       {!isPlaying && !gameOver && (
-        <StartScreen 
+        <MainMenu 
           playerName={playerName}
           setPlayerName={setPlayerName}
           handleStartGame={handleStartGame}
+          publicRooms={publicRooms}
+          currentRoom={currentRoom}
+          isHost={isHost}
+          isReady={isReady}
+          allPlayersReady={allPlayersReady}
+          onCreateRoom={createRoom}
+          onJoinRoom={joinRoom}
+          onLeaveRoom={leaveRoom}
+          onToggleReady={toggleReady}
+          onStartGame={startRoomGame}
         />
       )}
 
@@ -278,6 +299,3 @@ const GameBoard: React.FC = () => {
 };
 
 export default GameBoard;
-
-
-// GOOD VERSION
