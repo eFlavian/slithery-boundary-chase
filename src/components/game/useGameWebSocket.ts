@@ -205,8 +205,14 @@ export const useGameWebSocket = () => {
               return;
             }
             
+            let roomIdToUse = message.data.roomId;
+            if (roomIdToUse.startsWith('room_')) {
+              roomIdToUse = roomIdToUse.substring(5).toUpperCase();
+              console.log('Modified room ID to:', roomIdToUse);
+            }
+            
             const newRoom = {
-              id: message.data.roomId,
+              id: roomIdToUse,
               name: message.data.roomName,
               isPublic: message.data.isPublic,
               players: message.data.players || []
@@ -217,7 +223,7 @@ export const useGameWebSocket = () => {
             setIsHost(true);
             setIsReady(false);
             
-            toast.success(`Room "${message.data.roomName}" created. Room code: ${message.data.roomId}`);
+            toast.success(`Room "${message.data.roomName}" created. Room code: ${roomIdToUse}`);
             
             startRoomUpdateInterval();
             break;
@@ -456,10 +462,12 @@ export const useGameWebSocket = () => {
   const joinRoom = (roomId: string) => {
     if (!wsRef.current || !playerId) return;
     
+    const formattedRoomId = roomId.toUpperCase();
+    
     wsRef.current.send(JSON.stringify({
       type: 'joinRoom',
       playerId,
-      roomId: roomId.toUpperCase()
+      roomId: formattedRoomId
     }));
   };
 
