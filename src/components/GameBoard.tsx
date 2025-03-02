@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ThemeToggle from './game/ThemeToggle';
@@ -16,7 +15,7 @@ import GameKeyboardControls from './game/GameKeyboardControls';
 import GameLoop from './game/GameLoop';
 import CameraUpdateLoop from './game/CameraUpdateLoop';
 import { Direction, Position } from '@/lib/gameTypes';
-import { CELL_SIZE, GRID_SIZE } from '@/lib/gameConstants';
+import { CELL_SIZE, GRID_SIZE, MINIMAP_SIZE } from '@/lib/gameConstants';
 
 const GameBoard: React.FC = () => {
   const {
