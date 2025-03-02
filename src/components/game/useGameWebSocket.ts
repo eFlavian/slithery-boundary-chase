@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -38,7 +37,6 @@ export const useGameWebSocket = () => {
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   
-  // Room-related state
   const [publicRooms, setPublicRooms] = useState<Room[]>([]);
   const [currentRoom, setCurrentRoom] = useState<{
     id: string;
@@ -57,7 +55,6 @@ export const useGameWebSocket = () => {
   const countdownIntervalRef = useRef<number>();
 
   const connectToServer = () => {
-    // Fix for mobile: Use the current hostname instead of hardcoded localhost
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
     const wsUrl = `${protocol}//${wsHost}`;
@@ -116,7 +113,6 @@ export const useGameWebSocket = () => {
           break;
           
         case 'minimapUpdate':
-          // Clear any existing timers if this is a reset
           if (message.data.reset) {
             if (minimapTimerRef.current) {
               clearTimeout(minimapTimerRef.current);
@@ -132,10 +128,8 @@ export const useGameWebSocket = () => {
           setIsMinimapVisible(message.data.visible);
           setMinimapTimeLeft(message.data.duration);
           
-          // Start new countdown
           let timeLeft = message.data.duration;
           
-          // Clear existing countdown interval if it exists
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
           }
@@ -144,9 +138,7 @@ export const useGameWebSocket = () => {
             timeLeft -= 1;
             setMinimapTimeLeft(timeLeft);
             
-            // Start blinking when 3 seconds are left
             if (timeLeft === 3) {
-              // Clear any existing blink interval
               if (minimapBlinkRef.current) {
                 clearInterval(minimapBlinkRef.current);
               }
@@ -165,7 +157,6 @@ export const useGameWebSocket = () => {
             }
           }, 1000);
           
-          // Set timeout to stop the minimap visibility
           minimapTimerRef.current = window.setTimeout(() => {
             setIsMinimapVisible(false);
             if (minimapBlinkRef.current) {
@@ -177,7 +168,6 @@ export const useGameWebSocket = () => {
           }, message.data.duration * 1000);
           break;
 
-        // Room-related messages
         case 'publicRooms':
           setPublicRooms(message.data.rooms);
           break;
@@ -190,6 +180,7 @@ export const useGameWebSocket = () => {
             players: message.data.players
           });
           setIsHost(true);
+          setIsReady(false);
           toast.success(`Room "${message.data.roomName}" created`);
           break;
 
@@ -201,6 +192,7 @@ export const useGameWebSocket = () => {
             players: message.data.players
           });
           setIsHost(message.data.isHost);
+          setIsReady(false);
           toast.success(`Joined room "${message.data.roomName}"`);
           break;
 
@@ -244,7 +236,6 @@ export const useGameWebSocket = () => {
       console.log('Disconnected from server');
       toast.error('Disconnected from game server');
       
-      // Attempt to reconnect with exponential backoff
       if (reconnectAttempts < 5) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
         console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
@@ -307,7 +298,6 @@ export const useGameWebSocket = () => {
     setIsPlaying(true);
   };
 
-  // Room-related methods
   const createRoom = (roomName: string, isPublic: boolean, maxPlayers: number) => {
     if (!wsRef.current || !playerId) return;
     
@@ -398,14 +388,12 @@ export const useGameWebSocket = () => {
     };
   }, []);
 
-  // Periodically request public rooms
   useEffect(() => {
     if (playerId && !currentRoom && !isPlaying) {
       const interval = setInterval(() => {
         requestPublicRooms();
       }, 5000);
       
-      // Initial request
       requestPublicRooms();
       
       return () => clearInterval(interval);
@@ -428,7 +416,6 @@ export const useGameWebSocket = () => {
     startGame,
     setGameOver,
     setIsPlaying,
-    // Room-related
     publicRooms,
     currentRoom,
     isHost,

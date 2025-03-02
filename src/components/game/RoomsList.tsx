@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRightCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRightCircle } from 'lucide-react';
 
 type Room = {
   id: string;
@@ -16,11 +16,20 @@ type RoomsListProps = {
   rooms: Room[];
   onJoinRoom: (roomId: string) => void;
   onCreateRoom: () => void;
+  onBack: () => void;
 };
 
-const RoomsList: React.FC<RoomsListProps> = ({ rooms, onJoinRoom, onCreateRoom }) => {
+const RoomsList: React.FC<RoomsListProps> = ({ rooms, onJoinRoom, onCreateRoom, onBack }) => {
   return (
     <div className="space-y-4 w-full">
+      <button 
+        onClick={onBack}
+        className="flex items-center text-white/70 hover:text-white mb-4"
+      >
+        <ArrowLeft className="h-4 w-4 mr-1" />
+        Back to Menu
+      </button>
+      
       <div className="flex justify-between items-center">
         <h3 className="text-xl font-semibold text-white">Available Rooms</h3>
         <Button 

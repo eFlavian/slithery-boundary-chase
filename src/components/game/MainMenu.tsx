@@ -174,6 +174,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             rooms={publicRooms}
             onJoinRoom={onJoinRoom}
             onCreateRoom={() => setView('create')}
+            onBack={() => setView('main')}
           />
         )}
         
