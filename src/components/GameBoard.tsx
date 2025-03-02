@@ -1,5 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import ThemeToggle from './game/ThemeToggle';
 import GameControls from './game/GameControls';
 import GameOver from './game/GameOver';
@@ -7,10 +8,9 @@ import Minimap from './game/Minimap';
 import PlayerScore from './game/PlayerScore';
 import Leaderboard from './game/Leaderboard';
 import SpeedBoost from './game/SpeedBoost';
+import StartScreen from './game/StartScreen';
 import GameCanvas from './game/GameCanvas';
-import MainMenu from './game/MainMenu';
 import useGameWebSocket from './game/useGameWebSocket';
-import { Toaster } from './ui/toaster';
 
 type Position = {
   x: number;
@@ -25,8 +25,8 @@ const CELL_SIZE = 15;
 const INITIAL_SPEED = 140;
 const CAMERA_SMOOTHING = 0.55;
 const MIN_SNAKE_OPACITY = 0.3;
-const INACTIVE_PLAYER_OPACITY = 0.2;
 const MINIMAP_SIZE = 150;
+const INACTIVE_PLAYER_OPACITY = 0.2;
 
 const GameBoard: React.FC = () => {
   const {
@@ -39,29 +39,17 @@ const GameBoard: React.FC = () => {
     isPlaying,
     isMinimapVisible,
     minimapTimeLeft,
-    playerName,
-    setPlayerName,
     sendDirection,
     sendUpdate,
     sendSpeedBoost,
     startGame,
     setGameOver,
-    setIsPlaying,
-    
-    // Room-related state and functions
-    rooms,
-    currentRoom,
-    isCreatingRoom,
-    isJoiningRoom,
-    getRoomsList,
-    createRoom,
-    joinRoom,
-    leaveRoom,
-    setPlayerReady
+    setIsPlaying
   } = useGameWebSocket();
 
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
+  const [playerName, setPlayerName] = useState('');
   
   const gameLoop = useRef<number>();
   const lastKeyPress = useRef(0);
@@ -71,6 +59,7 @@ const GameBoard: React.FC = () => {
 
   const handleStartGame = () => {
     if (!playerName.trim()) {
+      toast.error("Please enter a name first!");
       return;
     }
 
@@ -239,21 +228,11 @@ const GameBoard: React.FC = () => {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <ThemeToggle />
 
-      {(!isPlaying && !gameOver) && (
-        <MainMenu 
+      {!isPlaying && !gameOver && (
+        <StartScreen 
           playerName={playerName}
           setPlayerName={setPlayerName}
-          playerId={playerId}
           handleStartGame={handleStartGame}
-          rooms={rooms}
-          currentRoom={currentRoom}
-          isCreatingRoom={isCreatingRoom}
-          isJoiningRoom={isJoiningRoom}
-          getRoomsList={getRoomsList}
-          createRoom={createRoom}
-          joinRoom={joinRoom}
-          leaveRoom={leaveRoom}
-          setPlayerReady={setPlayerReady}
         />
       )}
 
@@ -294,10 +273,11 @@ const GameBoard: React.FC = () => {
       />
 
       {gameOver && <GameOver score={score} />}
-      
-      <Toaster />
     </div>
   );
 };
 
 export default GameBoard;
+
+
+// GOOD VERSION
