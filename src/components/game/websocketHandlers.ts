@@ -47,9 +47,10 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
     }
   }
   
-  // Handle countdown
+  // Handle countdown - IMPORTANT: make sure to update the countdown value
   if (message.data.countdownValue !== undefined) {
     state.setCountdownValue(message.data.countdownValue);
+    console.log("Server countdown value:", message.data.countdownValue);
   }
   
   // Handle game time left

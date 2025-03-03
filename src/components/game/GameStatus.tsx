@@ -24,12 +24,14 @@ const GameStatus: React.FC<GameStatusProps> = ({
   if (status === 'waiting') {
     // If we have minimum players, show countdown instead of waiting message
     if (hasMinimumPlayers) {
+      // Use the actual countdown value from the server
+      // Don't try to calculate it manually as it might get out of sync
       return (
         <div className="fixed top-28 left-1/2 transform -translate-x-1/2 bg-black/50 px-4 py-2 rounded-lg z-50 backdrop-blur-sm">
           <div className="flex items-center justify-center">
             <span className="text-white font-medium flex items-center gap-2">
               <Clock className="w-4 h-4 text-yellow-400 animate-pulse" />
-              Game starts in: <span className="text-yellow-400 font-bold">{20 - (10 - countdownValue)}</span>s
+              Game starts in: <span className="text-yellow-400 font-bold">{countdownValue}</span>s
             </span>
           </div>
         </div>
