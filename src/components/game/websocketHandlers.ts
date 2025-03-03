@@ -50,6 +50,7 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
   // Handle countdown - IMPORTANT: make sure to update the countdown value
   if (message.data.countdownValue !== undefined) {
     state.setCountdownValue(message.data.countdownValue);
+    console.log("Updated countdown value:", message.data.countdownValue);
   }
   
   // Handle game time left
@@ -65,6 +66,17 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
     if (message.data.battleRoyale.center) {
       state.setBattleRoyaleCenter(message.data.battleRoyale.center);
     }
+  }
+};
+
+export const handleCountdownMessage: WebSocketMessageHandler = (message, state) => {
+  if (message.data.countdownValue !== undefined) {
+    state.setCountdownValue(message.data.countdownValue);
+    console.log("Received dedicated countdown update:", message.data.countdownValue);
+  }
+  
+  if (message.data.gameStatus) {
+    state.setGameStatus(message.data.gameStatus);
   }
 };
 
@@ -106,6 +118,9 @@ export const handleMessage = (event: MessageEvent, state: Parameters<WebSocketMe
     case 'gameState':
       handleGameStateMessage(message, state);
       break;
+    case 'countdown':
+      handleCountdownMessage(message, state);
+      break;
     case 'playerDeath':
       handlePlayerDeathMessage(message, state);
       break;
@@ -114,6 +129,9 @@ export const handleMessage = (event: MessageEvent, state: Parameters<WebSocketMe
       break;
     case 'minimapUpdate':
       handleMinimapUpdateMessage(message, state);
+      break;
+    default:
+      console.log("Unhandled message type:", message.type);
       break;
   }
 };

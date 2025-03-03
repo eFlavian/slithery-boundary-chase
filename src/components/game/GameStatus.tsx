@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Clock, Users } from 'lucide-react';
 
 type GameStatusProps = {
@@ -20,6 +20,11 @@ const GameStatus: React.FC<GameStatusProps> = ({
   
   // Determine if minimum players requirement is met (need at least 2 players)
   const hasMinimumPlayers = activePlayers.length >= 2;
+  
+  useEffect(() => {
+    console.log("GameStatus component - current status:", status);
+    console.log("GameStatus component - countdown value:", countdownValue);
+  }, [status, countdownValue]);
   
   if (status === 'waiting') {
     // If we have minimum players, show countdown instead of waiting message
