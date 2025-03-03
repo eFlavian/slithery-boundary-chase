@@ -24,8 +24,8 @@ const GameStatus: React.FC<GameStatusProps> = ({
         <Users className={`w-5 h-5 ${hasMinimumPlayers ? 'text-green-400' : 'text-yellow-400'} animate-pulse`} />
         <span className="text-white font-medium">
           {hasMinimumPlayers 
-            ? 'Ready to start game...'
-            : `Waiting for players (${players.length}/2 minimum)...`}
+            ? 'Waiting for countdown to start...'
+            : 'Waiting for at least one more player...'}
         </span>
       </div>
     );
