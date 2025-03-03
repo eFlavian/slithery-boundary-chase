@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { toast } from 'sonner';
 import ThemeToggle from './game/ThemeToggle';
 import GameControls from './game/GameControls';
@@ -10,7 +10,6 @@ import Leaderboard from './game/Leaderboard';
 import SpeedBoost from './game/SpeedBoost';
 import StartScreen from './game/StartScreen';
 import GameCanvas from './game/GameCanvas';
-import MainMenu from './game/MainMenu';
 import useGameWebSocket from './game/useGameWebSocket';
 import useGameCamera from '@/hooks/useGameCamera';
 import useGameControls from '@/hooks/useGameControls';
@@ -19,8 +18,6 @@ import { CELL_SIZE, GRID_SIZE, MIN_SNAKE_OPACITY, MINIMAP_SIZE, INACTIVE_PLAYER_
 const GameBoard: React.FC = () => {
   const {
     playerId,
-    playerName,
-    setPlayerName,
     players,
     foods,
     yellowDots,
@@ -34,18 +31,10 @@ const GameBoard: React.FC = () => {
     sendSpeedBoost,
     startGame,
     setGameOver,
-    setIsPlaying,
-    // Room-related properties
-    rooms,
-    currentRoom,
-    isConnected,
-    refreshRooms,
-    createRoom,
-    joinRoom,
-    leaveRoom,
-    toggleReady,
-    requestRoomUpdate
+    setIsPlaying
   } = useGameWebSocket();
+
+  const [playerName, setPlayerName] = useState('');
   
   const currentPlayer = players.find(p => p.id === playerId);
   const score = currentPlayer?.score || 0;
@@ -65,33 +54,24 @@ const GameBoard: React.FC = () => {
     gameOver
   });
 
-  // If in a room but game hasn't started, periodically request room updates
-  useEffect(() => {
-    if (currentRoom && !isPlaying) {
-      const interval = setInterval(() => {
-        requestRoomUpdate(currentRoom.id);
-      }, 2000);
-      
-      return () => clearInterval(interval);
+  const handleStartGame = () => {
+    if (!playerName.trim()) {
+      toast.error("Please enter a name first!");
+      return;
     }
-  }, [currentRoom, isPlaying]);
+
+    startGame(playerName.trim());
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-background/50 dark:from-gray-900 dark:to-gray-800">
       <ThemeToggle />
 
-      {!isPlaying && (
-        <MainMenu 
+      {!isPlaying && !gameOver && (
+        <StartScreen 
           playerName={playerName}
           setPlayerName={setPlayerName}
-          rooms={rooms}
-          currentRoom={currentRoom}
-          createRoom={createRoom}
-          joinRoom={joinRoom}
-          leaveRoom={leaveRoom}
-          toggleReady={toggleReady}
-          refreshRooms={refreshRooms}
-          isConnected={isConnected}
+          handleStartGame={handleStartGame}
         />
       )}
 
@@ -125,13 +105,11 @@ const GameBoard: React.FC = () => {
         currentPlayer={currentPlayer}
       />
 
-      {isPlaying && (
-        <GameControls 
-          handleDirection={handleDirection}
-          speedBoostPercentage={speedBoostPercentage}
-          setIsSpeedBoostActive={setIsSpeedBoostActive}
-        />
-      )}
+      <GameControls 
+        handleDirection={handleDirection}
+        speedBoostPercentage={speedBoostPercentage}
+        setIsSpeedBoostActive={setIsSpeedBoostActive}
+      />
 
       {gameOver && <GameOver score={score} />}
     </div>

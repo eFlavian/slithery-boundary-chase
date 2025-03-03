@@ -21,7 +21,7 @@ const GameOver: React.FC<GameOverProps> = ({ score }) => {
         >
           <div className="flex items-center justify-center gap-2">
             <Play className="w-4 h-4" />
-            Back to Menu
+            Play Again
           </div>
         </button>
       </div>
