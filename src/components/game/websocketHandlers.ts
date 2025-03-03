@@ -28,6 +28,7 @@ export const handleInitMessage: WebSocketMessageHandler = (message, state) => {
 };
 
 export const handleGameStateMessage: WebSocketMessageHandler = (message, state) => {
+  // Get all players
   state.setPlayers(message.data.players);
   state.setFoods(message.data.foods);
   state.setYellowDots(message.data.yellowDots || []);

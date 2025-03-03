@@ -8,8 +8,11 @@ type LeaderboardProps = {
 };
 
 const Leaderboard: React.FC<LeaderboardProps> = ({ players, playerId }) => {
-  // Only show top 10 players
-  const topPlayers = [...players]
+  // Only include players who have started the game
+  const activePlayers = players.filter(player => player.isPlaying);
+  
+  // Only show top 10 active players
+  const topPlayers = [...activePlayers]
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
     
@@ -37,7 +40,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ players, playerId }) => {
               <span className="font-semibold">{player.score}</span>
             </div>
           ))}
-          {players.length === 0 && (
+          {activePlayers.length === 0 && (
             <div className="text-xs text-white/50 italic text-center py-2">
               No players online
             </div>
