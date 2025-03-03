@@ -37,6 +37,12 @@ export const useGameWebSocket = () => {
   const reconnectTimerRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
 
+  // This function helps us to monitor crucial state changes
+  useEffect(() => {
+    console.log("Game status changed to:", gameStatus);
+    console.log("Countdown value changed to:", countdownValue);
+  }, [gameStatus, countdownValue]);
+
   const clearTimers = () => {
     if (minimapTimerRef.current) {
       clearTimeout(minimapTimerRef.current);
@@ -135,8 +141,8 @@ export const useGameWebSocket = () => {
       });
     };
 
-    ws.onclose = () => {
-      console.log('Disconnected from server');
+    ws.onclose = (event) => {
+      console.log('Disconnected from server, code:', event.code, 'reason:', event.reason);
       toast.error('Disconnected from game server');
       
       // Attempt to reconnect with exponential backoff

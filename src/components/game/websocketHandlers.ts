@@ -39,6 +39,7 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
     const previousStatus = message.data.previousGameStatus;
     const newStatus = message.data.gameStatus;
     
+    console.log("Game state update - Previous status:", previousStatus, "New status:", newStatus);
     state.setGameStatus(newStatus);
     
     // Only show the "GAME STARTED!" toast when transitioning from 'countdown' to 'playing'
@@ -49,8 +50,8 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
   
   // Handle countdown - IMPORTANT: make sure to update the countdown value
   if (message.data.countdownValue !== undefined) {
+    console.log("Game state updated countdown value:", message.data.countdownValue);
     state.setCountdownValue(message.data.countdownValue);
-    console.log("Updated countdown value:", message.data.countdownValue);
   }
   
   // Handle game time left
@@ -70,12 +71,15 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
 };
 
 export const handleCountdownMessage: WebSocketMessageHandler = (message, state) => {
+  console.log("Received dedicated countdown message:", message);
+  
   if (message.data.countdownValue !== undefined) {
+    console.log("Setting countdown value to:", message.data.countdownValue);
     state.setCountdownValue(message.data.countdownValue);
-    console.log("Received dedicated countdown update:", message.data.countdownValue);
   }
   
   if (message.data.gameStatus) {
+    console.log("Setting game status from countdown message to:", message.data.gameStatus);
     state.setGameStatus(message.data.gameStatus);
   }
 };
@@ -109,29 +113,34 @@ export const handleMinimapUpdateMessage: WebSocketMessageHandler = (message, sta
 };
 
 export const handleMessage = (event: MessageEvent, state: Parameters<WebSocketMessageHandler>[1]) => {
-  const message = JSON.parse(event.data);
+  try {
+    const message = JSON.parse(event.data);
+    console.log("Received websocket message:", message.type, message);
 
-  switch (message.type) {
-    case 'init':
-      handleInitMessage(message, state);
-      break;
-    case 'gameState':
-      handleGameStateMessage(message, state);
-      break;
-    case 'countdown':
-      handleCountdownMessage(message, state);
-      break;
-    case 'playerDeath':
-      handlePlayerDeathMessage(message, state);
-      break;
-    case 'gameOver':
-      handleGameOverMessage(message, state);
-      break;
-    case 'minimapUpdate':
-      handleMinimapUpdateMessage(message, state);
-      break;
-    default:
-      console.log("Unhandled message type:", message.type);
-      break;
+    switch (message.type) {
+      case 'init':
+        handleInitMessage(message, state);
+        break;
+      case 'gameState':
+        handleGameStateMessage(message, state);
+        break;
+      case 'countdown':
+        handleCountdownMessage(message, state);
+        break;
+      case 'playerDeath':
+        handlePlayerDeathMessage(message, state);
+        break;
+      case 'gameOver':
+        handleGameOverMessage(message, state);
+        break;
+      case 'minimapUpdate':
+        handleMinimapUpdateMessage(message, state);
+        break;
+      default:
+        console.log("Unhandled message type:", message.type);
+        break;
+    }
+  } catch (error) {
+    console.error("Error handling websocket message:", error);
   }
 };
