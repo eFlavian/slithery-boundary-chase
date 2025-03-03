@@ -35,10 +35,13 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
   
   // Handle game status updates
   if (message.data.gameStatus) {
-    state.setGameStatus(message.data.gameStatus);
+    const previousStatus = message.data.previousGameStatus;
+    const newStatus = message.data.gameStatus;
+    
+    state.setGameStatus(newStatus);
     
     // If the game just started (changed to 'playing'), show a toast
-    if (message.data.gameStatus === 'playing') {
+    if (newStatus === 'playing' && previousStatus !== 'playing') {
       toast.success("GAME STARTED!");
     }
   }
