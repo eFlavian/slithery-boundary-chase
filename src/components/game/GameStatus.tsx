@@ -24,7 +24,8 @@ const GameStatus: React.FC<GameStatusProps> = ({
   useEffect(() => {
     console.log("GameStatus component - current status:", status);
     console.log("GameStatus component - countdown value:", countdownValue);
-  }, [status, countdownValue]);
+    console.log("GameStatus component - game time left:", gameTimeLeft);
+  }, [status, countdownValue, gameTimeLeft]);
   
   if (status === 'waiting') {
     // If we have minimum players, show countdown instead of waiting message
@@ -67,11 +68,14 @@ const GameStatus: React.FC<GameStatusProps> = ({
     const minutes = Math.floor(gameTimeLeft / 60);
     const seconds = gameTimeLeft % 60;
     const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    
+    // Add pulsing effect for last 30 seconds
+    const isEndingSoon = gameTimeLeft <= 30;
 
     return (
       <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-black/50 px-4 py-2 rounded-lg z-50 backdrop-blur-sm flex items-center gap-2">
-        <Clock className={`w-5 h-5 ${gameTimeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-white'}`} />
-        <span className={`font-medium ${gameTimeLeft <= 10 ? 'text-red-500' : 'text-white'}`}>
+        <Clock className={`w-5 h-5 ${isEndingSoon ? 'text-red-500 animate-pulse' : 'text-white'}`} />
+        <span className={`font-medium ${isEndingSoon ? 'text-red-500' : 'text-white'}`}>
           {formattedTime}
         </span>
       </div>

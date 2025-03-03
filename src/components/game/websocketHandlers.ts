@@ -46,6 +46,13 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
       // Only show the "GAME STARTED!" toast when transitioning from 'countdown' to 'playing'
       if (newStatus === 'playing' && previousStatus === 'countdown') {
         toast.success("GAME STARTED!");
+        console.log("Game officially started! Ghost mode disabled.");
+        
+        // Initialize game time to 10 minutes (600 seconds) when game starts
+        if (message.data.gameTimeLeft === undefined) {
+          console.log("Setting initial game time to 10 minutes (600 seconds)");
+          state.setGameTimeLeft(600);
+        }
       }
     }
     
@@ -57,6 +64,7 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
     
     // Handle game time left
     if (message.data.gameTimeLeft !== undefined) {
+      console.log("Game time left updated to:", message.data.gameTimeLeft);
       state.setGameTimeLeft(message.data.gameTimeLeft);
     }
     
@@ -82,11 +90,22 @@ export const handleCountdownMessage: WebSocketMessageHandler = (message, state) 
       const newValue = message.data.countdownValue;
       console.log("Setting countdown value to:", newValue);
       state.setCountdownValue(newValue);
+      
+      // If countdown reaches 0, prepare for game start (will be confirmed by gameState message)
+      if (newValue === 0) {
+        console.log("Countdown reached 0, preparing for game start");
+      }
     }
     
     if (message.data.gameStatus) {
       console.log("Setting game status from countdown message to:", message.data.gameStatus);
       state.setGameStatus(message.data.gameStatus);
+      
+      // If game transitions to playing, make sure to initialize the 10-minute timer
+      if (message.data.gameStatus === 'playing') {
+        console.log("Game transitioning to playing state from countdown message");
+        state.setGameTimeLeft(600); // 10 minutes in seconds
+      }
     }
   } catch (error) {
     console.error("Error in handleCountdownMessage:", error);
