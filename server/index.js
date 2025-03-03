@@ -11,7 +11,8 @@ const gameState = {
   foods: [],
   yellowDots: [],
   portals: [],
-  playerCount: 0
+  playerCount: 0,
+  gameStatus: 'waiting'
 };
 
 const GRID_SIZE = 256;
@@ -22,7 +23,7 @@ const INITIAL_YELLOW_DOTS = 5;
 const FOOD_SPAWN_INTERVAL = 5000;
 const PORTAL_SPAWN_INTERVAL = 20000;
 const YELLOW_DOT_SPAWN_INTERVAL = 60000;
-const MINIMAP_DURATION = 20; // Changed from 10 to 20 seconds
+const MINIMAP_DURATION = 20;
 
 function getRandomPosition() {
   return {
@@ -84,9 +85,13 @@ function spawnPortal() {
   gameState.portals.push(position);
 }
 
-function handleCollision(playerId, newHead) {
+function handleCollision(playerId, newHead, gameStatus) {
   const player = gameState.players.get(playerId);
   if (!player) return { collision: false };
+
+  if (gameStatus !== 'playing') {
+    return { collision: false };
+  }
 
   if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
     return { 
@@ -188,7 +193,7 @@ wss.on('connection', (ws) => {
     isPlaying: false,
     minimapVisible: false,
     minimapTimer: null,
-    minimapTimeLeft: 0 // Track time left on minimap
+    minimapTimeLeft: 0
   });
 
   ws.send(JSON.stringify({
@@ -216,6 +221,9 @@ wss.on('connection', (ws) => {
       case 'direction':
         if (player.isPlaying) {
           player.direction = data.direction;
+          if (data.gameStatus) {
+            gameState.gameStatus = data.gameStatus;
+          }
         }
         break;
 
@@ -231,7 +239,7 @@ wss.on('connection', (ws) => {
           case 'RIGHT': newHead.x += 1; break;
         }
 
-        const collisionResult = handleCollision(data.playerId, newHead);
+        const collisionResult = handleCollision(data.playerId, newHead, data.gameStatus || gameState.gameStatus);
         
         if (collisionResult.collision) {
           player.isPlaying = false;
@@ -248,7 +256,8 @@ wss.on('connection', (ws) => {
                 type: 'playerDeath',
                 data: { 
                   message: collisionResult.message,
-                  playerId: data.playerId
+                  playerId: data.playerId,
+                  gameStatus: gameState.gameStatus
                 }
               }));
             }
@@ -283,17 +292,14 @@ wss.on('connection', (ws) => {
         );
 
         if (yellowDotIndex !== -1) {
-          // Remove the yellow dot
           gameState.yellowDots.splice(yellowDotIndex, 1);
           
-          // Always send a fixed duration of 20 seconds (MINIMAP_DURATION)
-          // Don't add to existing duration
           ws.send(JSON.stringify({
             type: 'minimapUpdate',
             data: { 
               visible: true,
               duration: MINIMAP_DURATION,
-              reset: true // Flag to indicate we should reset any existing timer
+              reset: true
             }
           }));
         }
