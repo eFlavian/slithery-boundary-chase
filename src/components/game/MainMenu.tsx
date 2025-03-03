@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Plus, Users, Globe, Lock, RefreshCw, ArrowRight } from 'lucide-react';
 import { Room } from '@/types/gameTypes';
@@ -56,10 +55,12 @@ const MainMenu: React.FC<MainMenuProps> = ({
   }, [view, isConnected, refreshRooms]);
 
   const handleCreateRoom = () => {
-    if (!roomName.trim()) {
-      roomName = `${playerName}'s Room`;
+    // Fixed: Using a local variable instead of reassigning the const
+    let roomNameToUse = roomName.trim();
+    if (!roomNameToUse) {
+      roomNameToUse = `${playerName}'s Room`;
     }
-    createRoom(roomName.trim(), isPublic);
+    createRoom(roomNameToUse, isPublic);
     setRoomName('');
   };
 
@@ -260,13 +261,15 @@ const MainMenu: React.FC<MainMenuProps> = ({
   // Room lobby view
   if (view === 'lobby' && currentRoom) {
     const isHost = currentRoom.hostId === localStorage.getItem('playerId');
-    const allPlayersReady = currentRoom.players.length > 1 && 
-                            currentPlayer?.isReady &&
-                            currentRoom.players.every(p => p.isReady);
     
+    // Fixed: Moved currentPlayer declaration before it's used
     const currentPlayer = currentRoom.players.find(
       p => p.id === localStorage.getItem('playerId')
     );
+    
+    const allPlayersReady = currentRoom.players.length > 1 && 
+                            currentPlayer?.isReady &&
+                            currentRoom.players.every(p => p.isReady);
     
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">

@@ -70,8 +70,9 @@ export const handleRoomUpdateMessage: WebSocketMessageHandler = (message, state)
   if (roomData) {
     state.setCurrentRoom(roomData);
     
-    // If game started in room
-    if (roomData.inProgress && !state.isPlaying) {
+    // If game started in room and we're not playing yet
+    // Fixed: Call setIsPlaying instead of accessing isPlaying directly
+    if (roomData.inProgress) {
       state.setIsPlaying(true);
       state.setGameOver(false);
     }
