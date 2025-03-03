@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { toast } from 'sonner';
 import ThemeToggle from './game/ThemeToggle';
 import GameControls from './game/GameControls';
@@ -43,12 +43,7 @@ const GameBoard: React.FC = () => {
 
   const [playerName, setPlayerName] = useState('');
   
-  // Use useMemo to reduce recalculations
-  const currentPlayer = useMemo(() => 
-    players.find(p => p.id === playerId), 
-    [players, playerId]
-  );
-  
+  const currentPlayer = players.find(p => p.id === playerId);
   const score = currentPlayer?.score || 0;
   const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
   const winner = players.length === 1 && gameOver ? players[0]?.name : undefined;
@@ -62,11 +57,9 @@ const GameBoard: React.FC = () => {
   } = useGameControls({
     sendDirection,
     sendUpdate,
-    sendSpeedBoost, // Pass the sendSpeedBoost function
     currentPlayer,
     isPlaying,
-    gameOver,
-    gameStatus // Pass the gameStatus to control logic
+    gameOver
   });
 
   const handleStartGame = () => {

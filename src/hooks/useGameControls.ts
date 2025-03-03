@@ -1,24 +1,21 @@
+
 import { useEffect, useRef, useState } from 'react';
-import { Direction, getOppositeDirection } from '@/utils/gameUtils';
+import { Direction } from '@/utils/gameUtils';
 
 type UseGameControlsProps = {
   sendDirection: (direction: Direction) => void;
   sendUpdate: () => void;
-  sendSpeedBoost?: () => void;
   currentPlayer?: any;
   isPlaying: boolean;
   gameOver: boolean;
-  gameStatus: 'waiting' | 'countdown' | 'playing' | 'ended';
 };
 
 const useGameControls = ({
   sendDirection,
   sendUpdate,
-  sendSpeedBoost,
   currentPlayer,
   isPlaying,
-  gameOver,
-  gameStatus
+  gameOver
 }: UseGameControlsProps) => {
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
@@ -27,9 +24,14 @@ const useGameControls = ({
   const gameLoop = useRef<number>();
 
   const handleDirection = (newDirection: Direction) => {
-    if (gameStatus !== 'playing') return;
+    const oppositeDirections = {
+      'UP': 'DOWN',
+      'DOWN': 'UP',
+      'LEFT': 'RIGHT',
+      'RIGHT': 'LEFT'
+    };
     
-    if (getOppositeDirection(direction) === newDirection) {
+    if (oppositeDirections[direction] === newDirection) {
       return;
     }
 
@@ -44,8 +46,6 @@ const useGameControls = ({
     if (event.key.startsWith('Arrow')) {
       event.preventDefault();
     }
-
-    if (gameStatus !== 'playing') return;
 
     const now = Date.now();
     if (now - lastKeyPress.current < 50) return;
@@ -96,44 +96,26 @@ const useGameControls = ({
   };
 
   const updateGame = () => {
-    if (gameStatus !== 'playing') return;
-    
     sendUpdate();
 
     if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage > 0) {
-      if (sendSpeedBoost) {
-        sendSpeedBoost();
-      }
+      sendSpeedBoost();
     } else if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage <= 0) {
       setIsSpeedBoostActive(false);
     }
   };
 
+  const sendSpeedBoost = () => {
+    // This is handled directly by the useGameWebSocket hook
+  };
+
   useEffect(() => {
-    if (!gameOver && isPlaying && gameStatus === 'playing') {
-      const snakeLength = currentPlayer?.snake?.length || 0;
-      const baseSpeed = 140;
-      
-      const speedAdjustment = Math.min(1, 80 / Math.max(80, snakeLength));
-      const speed = isSpeedBoostActive ? baseSpeed / 2 : baseSpeed;
-      const adjustedSpeed = speed * speedAdjustment;
-      
-      const frameUpdate = () => {
-        updateGame();
-        gameLoop.current = window.setTimeout(() => {
-          window.requestAnimationFrame(frameUpdate);
-        }, adjustedSpeed);
-      };
-      
-      window.requestAnimationFrame(frameUpdate);
-      
-      return () => {
-        if (gameLoop.current) {
-          clearTimeout(gameLoop.current);
-        }
-      };
+    if (!gameOver && isPlaying) {
+      const speed = isSpeedBoostActive ? 140 / 2 : 140;
+      gameLoop.current = window.setInterval(updateGame, speed);
+      return () => clearInterval(gameLoop.current);
     }
-  }, [gameOver, direction, isSpeedBoostActive, isPlaying, gameStatus, currentPlayer?.snake?.length]);
+  }, [gameOver, direction, isSpeedBoostActive, isPlaying]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -142,7 +124,7 @@ const useGameControls = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [direction, currentPlayer?.speedBoostPercentage, gameStatus]);
+  }, [direction, currentPlayer?.speedBoostPercentage]);
 
   return {
     direction,
