@@ -543,6 +543,18 @@ wss.on('close', () => {
 // Start server with proper error handling
 server.listen(3001, '0.0.0.0', () => {
   console.log('WebSocket server is running on ws://0.0.0.0:3001');
+  
+  // Log when the server starts listening
+  console.log('Server environment:', {
+    NODE_ENV: process.env.NODE_ENV,
+    PORT: 3001,
+    host: '0.0.0.0'
+  });
 }).on('error', (error) => {
   console.error('Error starting server:', error);
+});
+
+// Log unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });

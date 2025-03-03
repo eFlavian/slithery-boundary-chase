@@ -144,19 +144,19 @@ export const useGameWebSocket = () => {
       console.log('Disconnected from server, code:', event.code, 'reason:', event.reason);
       toast.error('Disconnected from game server');
 
-      // Attempt to reconnect with exponential backoff
-      if (reconnectAttempts < 5) {
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-        console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
-
-        if (reconnectTimerRef.current) {
-          clearTimeout(reconnectTimerRef.current);
-        }
+      // Only attempt to reconnect if we haven't exceeded max attempts
+      const MAX_RECONNECT_ATTEMPTS = 5;
+      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff
+        console.log(`Attempting to reconnect in ${delay/1000} seconds... (Attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
 
         reconnectTimerRef.current = window.setTimeout(() => {
           setReconnectAttempts(prev => prev + 1);
           connectToServer();
         }, delay);
+      } else {
+        console.log("Max reconnection attempts reached. Please refresh the page.");
+        toast.error("Connection to game server lost. Please refresh the page.");
       }
     };
 
