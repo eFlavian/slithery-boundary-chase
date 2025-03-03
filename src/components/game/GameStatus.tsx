@@ -25,7 +25,7 @@ const GameStatus: React.FC<GameStatusProps> = ({
         <span className="text-white font-medium">
           {hasMinimumPlayers 
             ? 'Waiting for countdown to start...'
-            : 'Waiting for at least one more player...'}
+            : 'Waiting for players...'}
         </span>
       </div>
     );
