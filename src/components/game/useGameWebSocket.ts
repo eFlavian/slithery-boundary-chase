@@ -1,12 +1,14 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
+import { handleMessage } from './websocketHandlers';
+import { Direction } from '@/utils/gameUtils';
 
-type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type Position = {
   x: number;
   y: number;
 };
+
 type FoodType = 'normal' | 'special';
 type FoodItem = Position & { type: FoodType };
 
@@ -27,6 +29,63 @@ export const useGameWebSocket = () => {
   const minimapBlinkRef = useRef<number>();
   const reconnectTimerRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
+
+  const clearTimers = () => {
+    if (minimapTimerRef.current) {
+      clearTimeout(minimapTimerRef.current);
+    }
+    if (minimapBlinkRef.current) {
+      clearInterval(minimapBlinkRef.current);
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+    }
+  };
+
+  const setupMinimapTimers = (duration: number) => {
+    let timeLeft = duration;
+    
+    // Clear existing countdown interval if it exists
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+    }
+    
+    countdownIntervalRef.current = window.setInterval(() => {
+      timeLeft -= 1;
+      setMinimapTimeLeft(timeLeft);
+      
+      // Start blinking when 3 seconds are left
+      if (timeLeft === 3) {
+        // Clear any existing blink interval
+        if (minimapBlinkRef.current) {
+          clearInterval(minimapBlinkRef.current);
+        }
+        
+        let isVisible = true;
+        minimapBlinkRef.current = window.setInterval(() => {
+          isVisible = !isVisible;
+          setIsMinimapVisible(isVisible);
+        }, 500);
+      }
+      
+      if (timeLeft <= 0) {
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+        }
+      }
+    }, 1000);
+    
+    // Set timeout to stop the minimap visibility
+    minimapTimerRef.current = window.setTimeout(() => {
+      setIsMinimapVisible(false);
+      if (minimapBlinkRef.current) {
+        clearInterval(minimapBlinkRef.current);
+      }
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+    }, duration * 1000);
+  };
 
   const connectToServer = () => {
     // Fix for mobile: Use the current hostname instead of hardcoded localhost
@@ -49,102 +108,19 @@ export const useGameWebSocket = () => {
     };
 
     ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-
-      switch (message.type) {
-        case 'init':
-          setPlayerId(message.data.playerId);
-          break;
-
-        case 'gameState':
-          setPlayers(message.data.players);
-          setFoods(message.data.foods);
-          setYellowDots(message.data.yellowDots || []);
-          setPortals(message.data.portals);
-          break;
-
-        case 'playerDeath':
-          toast(message.data.message);
-          break;
-
-        case 'gameOver':
-          setGameOver(true);
-          setIsPlaying(false);
-          setIsMinimapVisible(false);
-          if (minimapTimerRef.current) {
-            clearTimeout(minimapTimerRef.current);
-          }
-          if (minimapBlinkRef.current) {
-            clearInterval(minimapBlinkRef.current);
-          }
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-          }
-          toast.error(`Game Over! ${message.data.message}`);
-          break;
-          
-        case 'minimapUpdate':
-          // Clear any existing timers if this is a reset
-          if (message.data.reset) {
-            if (minimapTimerRef.current) {
-              clearTimeout(minimapTimerRef.current);
-            }
-            if (minimapBlinkRef.current) {
-              clearInterval(minimapBlinkRef.current);
-            }
-            if (countdownIntervalRef.current) {
-              clearInterval(countdownIntervalRef.current);
-            }
-          }
-          
-          setIsMinimapVisible(message.data.visible);
-          setMinimapTimeLeft(message.data.duration);
-          
-          // Start new countdown
-          let timeLeft = message.data.duration;
-          
-          // Clear existing countdown interval if it exists
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-          }
-          
-          countdownIntervalRef.current = window.setInterval(() => {
-            timeLeft -= 1;
-            setMinimapTimeLeft(timeLeft);
-            
-            // Start blinking when 3 seconds are left
-            if (timeLeft === 3) {
-              // Clear any existing blink interval
-              if (minimapBlinkRef.current) {
-                clearInterval(minimapBlinkRef.current);
-              }
-              
-              let isVisible = true;
-              minimapBlinkRef.current = window.setInterval(() => {
-                isVisible = !isVisible;
-                setIsMinimapVisible(isVisible);
-              }, 500);
-            }
-            
-            if (timeLeft <= 0) {
-              if (countdownIntervalRef.current) {
-                clearInterval(countdownIntervalRef.current);
-              }
-            }
-          }, 1000);
-          
-          // Set timeout to stop the minimap visibility
-          minimapTimerRef.current = window.setTimeout(() => {
-            setIsMinimapVisible(false);
-            if (minimapBlinkRef.current) {
-              clearInterval(minimapBlinkRef.current);
-            }
-            if (countdownIntervalRef.current) {
-              clearInterval(countdownIntervalRef.current);
-            }
-          }, message.data.duration * 1000);
-          break;
-      }
+      handleMessage(event, {
+        setPlayerId,
+        setPlayers,
+        setFoods,
+        setYellowDots,
+        setPortals,
+        setGameOver,
+        setIsPlaying,
+        setIsMinimapVisible,
+        setMinimapTimeLeft,
+        clearTimers,
+        setupMinimapTimers
+      });
     };
 
     ws.onclose = () => {
@@ -219,17 +195,9 @@ export const useGameWebSocket = () => {
     
     return () => {
       wsRef.current?.close();
-      if (minimapTimerRef.current) {
-        clearTimeout(minimapTimerRef.current);
-      }
-      if (minimapBlinkRef.current) {
-        clearInterval(minimapBlinkRef.current);
-      }
+      clearTimers();
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
-      }
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
       }
     };
   }, []);
