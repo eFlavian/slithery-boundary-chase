@@ -28,3 +28,6 @@ const Index = () => {
 };
 
 export default Index;
+
+
+// GOOD VERSION BASIC
