@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { handleMessage } from './websocketHandlers';
@@ -167,7 +168,8 @@ export const useGameWebSocket = () => {
     wsRef.current.send(JSON.stringify({
       type: 'direction',
       direction,
-      playerId
+      playerId,
+      gameStatus // Send the current game status to let server know if game is active
     }));
   };
 
@@ -176,7 +178,8 @@ export const useGameWebSocket = () => {
 
     wsRef.current.send(JSON.stringify({
       type: 'update',
-      playerId
+      playerId,
+      gameStatus // Send the current game status to let server know if game is active
     }));
   };
 

@@ -70,7 +70,10 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
 };
 
 export const handlePlayerDeathMessage: WebSocketMessageHandler = (message, state) => {
-  toast(message.data.message);
+  // Only show death message if the game has started
+  if (message.data.gameStatus === 'playing') {
+    toast(message.data.message);
+  }
 };
 
 export const handleGameOverMessage: WebSocketMessageHandler = (message, state) => {
