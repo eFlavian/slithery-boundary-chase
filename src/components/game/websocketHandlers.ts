@@ -15,6 +15,9 @@ type WebSocketMessageHandler = (
     setMinimapTimeLeft: (time: number) => void;
     clearTimers: () => void;
     setupMinimapTimers: (duration: number) => void;
+    // Room-related handlers
+    setRooms: (rooms: any[]) => void;
+    setCurrentRoom: (room: any | null) => void;
   }
 ) => void;
 
@@ -26,7 +29,7 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
   state.setPlayers(message.data.players);
   state.setFoods(message.data.foods);
   state.setYellowDots(message.data.yellowDots || []);
-  state.setPortals(message.data.portals);
+  state.setPortals(message.data.portals || []);
 };
 
 export const handlePlayerDeathMessage: WebSocketMessageHandler = (message, state) => {
@@ -39,6 +42,9 @@ export const handleGameOverMessage: WebSocketMessageHandler = (message, state) =
   state.setIsMinimapVisible(false);
   state.clearTimers();
   toast.error(`Game Over! ${message.data.message}`);
+  
+  // Clear current room if in one
+  state.setCurrentRoom(null);
 };
 
 export const handleMinimapUpdateMessage: WebSocketMessageHandler = (message, state) => {
@@ -52,6 +58,31 @@ export const handleMinimapUpdateMessage: WebSocketMessageHandler = (message, sta
   
   // Setup new timers
   state.setupMinimapTimers(message.data.duration);
+};
+
+export const handleRoomsListMessage: WebSocketMessageHandler = (message, state) => {
+  state.setRooms(message.data.rooms);
+};
+
+export const handleRoomUpdateMessage: WebSocketMessageHandler = (message, state) => {
+  const roomData = message.data.room;
+  
+  if (roomData) {
+    state.setCurrentRoom(roomData);
+    
+    // If game started in room
+    if (roomData.inProgress && !state.isPlaying) {
+      state.setIsPlaying(true);
+      state.setGameOver(false);
+    }
+  } else {
+    // Room might have been deleted
+    state.setCurrentRoom(null);
+  }
+};
+
+export const handleRoomErrorMessage: WebSocketMessageHandler = (message, state) => {
+  toast.error(message.data.message);
 };
 
 export const handleMessage = (event: MessageEvent, state: Parameters<WebSocketMessageHandler>[1]) => {
@@ -72,6 +103,15 @@ export const handleMessage = (event: MessageEvent, state: Parameters<WebSocketMe
       break;
     case 'minimapUpdate':
       handleMinimapUpdateMessage(message, state);
+      break;
+    case 'roomsList':
+      handleRoomsListMessage(message, state);
+      break;
+    case 'roomUpdate':
+      handleRoomUpdateMessage(message, state);
+      break;
+    case 'roomError':
+      handleRoomErrorMessage(message, state);
       break;
   }
 };
