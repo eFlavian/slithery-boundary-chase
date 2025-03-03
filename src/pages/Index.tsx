@@ -30,4 +30,4 @@ const Index = () => {
 export default Index;
 
 
-// GOOD VERSION BASIC
+// GOOD VERSION BASIC wtf 
