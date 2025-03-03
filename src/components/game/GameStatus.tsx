@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Clock, Users, AlertCircle } from 'lucide-react';
 
@@ -15,7 +14,7 @@ const GameStatus: React.FC<GameStatusProps> = ({
   gameTimeLeft,
   players 
 }) => {
-  // Determine if minimum players requirement is met
+  // Determine if minimum players requirement is met (need at least 2 players)
   const hasMinimumPlayers = players.length >= 2;
   
   if (status === 'waiting') {
@@ -23,9 +22,9 @@ const GameStatus: React.FC<GameStatusProps> = ({
       <div className="fixed top-28 left-1/2 transform -translate-x-1/2 bg-black/50 px-4 py-2 rounded-lg z-50 backdrop-blur-sm flex items-center gap-2">
         <Users className={`w-5 h-5 ${hasMinimumPlayers ? 'text-green-400' : 'text-yellow-400'} animate-pulse`} />
         <span className="text-white font-medium">
-          {hasMinimumPlayers 
-            ? 'Waiting for countdown to start...'
-            : 'Waiting for players...'}
+          {players.length === 1 
+            ? 'Waiting for players...'
+            : 'Waiting for countdown to start...'}
         </span>
       </div>
     );
