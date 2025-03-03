@@ -4,8 +4,40 @@ import { createServer } from 'http';
 import express from 'express';
 
 const app = express();
+
+// Add CORS headers for all requests
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  next();
+});
+
 const server = createServer(app);
-const wss = new WebSocketServer({ server });
+
+// Configure WebSocket server with ping/pong for connection stability
+const wss = new WebSocketServer({ 
+  server,
+  // Set a 30 second timeout
+  clientTracking: true,
+  perMessageDeflate: {
+    zlibDeflateOptions: {
+      chunkSize: 1024,
+      memLevel: 7,
+      level: 3
+    },
+    zlibInflateOptions: {
+      chunkSize: 10 * 1024
+    },
+    concurrencyLimit: 10,
+    threshold: 1024
+  }
+});
+
+// Set up a heartbeat mechanism to keep connections alive
+function heartbeat() {
+  this.isAlive = true;
+}
 
 // Constants
 const GRID_SIZE = 256;
@@ -273,6 +305,12 @@ function checkGameConditions() {
 
 // WebSocket connection handlers
 wss.on('connection', (ws) => {
+  console.log("New client connected");
+  
+  // Set up heartbeat for this connection
+  ws.isAlive = true;
+  ws.on('pong', heartbeat);
+  
   const playerId = `player${++gameState.playerCount}`;
   const spawnPosition = getRandomUnoccupiedPosition();
   
@@ -290,11 +328,18 @@ wss.on('connection', (ws) => {
     minimapTimeLeft: 0
   });
 
+  // Store the playerId on the WebSocket object for reference
+  ws.playerId = playerId;
+
   // Send initial data to new player
-  ws.send(JSON.stringify({
-    type: 'init',
-    data: { playerId }
-  }));
+  try {
+    ws.send(JSON.stringify({
+      type: 'init',
+      data: { playerId }
+    }));
+  } catch (error) {
+    console.error("Error sending init message:", error);
+  }
 
   broadcastGameState();
 
@@ -457,12 +502,47 @@ wss.on('connection', (ws) => {
 
 // Initialize game and set up regular broadcasts
 initializeGame();
+
+// Set up broadcast interval
 setInterval(() => {
   checkGameConditions();
   broadcastGameState();
 }, BROADCAST_INTERVAL);
 
-// Start server
+// Set up ping interval to detect dead connections
+const pingInterval = setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (ws.isAlive === false) {
+      console.log("Terminating dead connection", ws.playerId);
+      // Handle player cleanup
+      if (ws.playerId && gameState.players.has(ws.playerId)) {
+        const player = gameState.players.get(ws.playerId);
+        if (player && player.minimapTimer) {
+          clearTimeout(player.minimapTimer);
+        }
+        gameState.players.delete(ws.playerId);
+        checkGameConditions();
+      }
+      return ws.terminate();
+    }
+    
+    ws.isAlive = false;
+    try {
+      ws.ping(() => {});
+    } catch (error) {
+      console.error("Error sending ping:", error);
+    }
+  });
+}, 30000); // Check every 30 seconds
+
+// Clean up the ping interval when the server closes
+wss.on('close', () => {
+  clearInterval(pingInterval);
+});
+
+// Start server with proper error handling
 server.listen(3001, '0.0.0.0', () => {
   console.log('WebSocket server is running on ws://0.0.0.0:3001');
+}).on('error', (error) => {
+  console.error('Error starting server:', error);
 });
