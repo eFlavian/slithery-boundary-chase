@@ -1,8 +1,7 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { handleMessage } from './websocketHandlers';
-import { Direction } from '@/utils/gameUtils';
+import { Direction, GRID_SIZE } from '@/utils/gameUtils';
 
 type Position = {
   x: number;
@@ -23,6 +22,13 @@ export const useGameWebSocket = () => {
   const [isMinimapVisible, setIsMinimapVisible] = useState(false);
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  
+  // Battle Royale game states
+  const [gameStatus, setGameStatus] = useState<'waiting' | 'countdown' | 'playing' | 'ended'>('waiting');
+  const [countdownValue, setCountdownValue] = useState(10);
+  const [gameTimeLeft, setGameTimeLeft] = useState(60);
+  const [battleRoyaleRadius, setBattleRoyaleRadius] = useState(0);
+  const [battleRoyaleCenter, setBattleRoyaleCenter] = useState<Position>({ x: GRID_SIZE / 2, y: GRID_SIZE / 2 });
   
   const wsRef = useRef<WebSocket | null>(null);
   const minimapTimerRef = useRef<number>();
@@ -118,6 +124,11 @@ export const useGameWebSocket = () => {
         setIsPlaying,
         setIsMinimapVisible,
         setMinimapTimeLeft,
+        setGameStatus,
+        setCountdownValue,
+        setGameTimeLeft,
+        setBattleRoyaleRadius,
+        setBattleRoyaleCenter,
         clearTimers,
         setupMinimapTimers
       });
@@ -212,12 +223,22 @@ export const useGameWebSocket = () => {
     isPlaying,
     isMinimapVisible,
     minimapTimeLeft,
+    gameStatus,
+    countdownValue,
+    gameTimeLeft,
+    battleRoyaleRadius,
+    battleRoyaleCenter,
     sendDirection,
     sendUpdate,
     sendSpeedBoost,
     startGame,
     setGameOver,
-    setIsPlaying
+    setIsPlaying,
+    setGameStatus,
+    setCountdownValue,
+    setGameTimeLeft,
+    setBattleRoyaleRadius,
+    setBattleRoyaleCenter
   };
 };
 

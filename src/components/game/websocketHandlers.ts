@@ -13,6 +13,11 @@ type WebSocketMessageHandler = (
     setIsPlaying: (playing: boolean) => void;
     setIsMinimapVisible: (visible: boolean) => void;
     setMinimapTimeLeft: (time: number) => void;
+    setGameStatus: (status: 'waiting' | 'countdown' | 'playing' | 'ended') => void;
+    setCountdownValue: (value: number) => void;
+    setGameTimeLeft: (time: number) => void;
+    setBattleRoyaleRadius: (radius: number) => void;
+    setBattleRoyaleCenter: (center: {x: number, y: number}) => void;
     clearTimers: () => void;
     setupMinimapTimers: (duration: number) => void;
   }
@@ -27,6 +32,31 @@ export const handleGameStateMessage: WebSocketMessageHandler = (message, state) 
   state.setFoods(message.data.foods);
   state.setYellowDots(message.data.yellowDots || []);
   state.setPortals(message.data.portals);
+  
+  // Handle game status updates
+  if (message.data.gameStatus) {
+    state.setGameStatus(message.data.gameStatus);
+  }
+  
+  // Handle countdown
+  if (message.data.countdownValue !== undefined) {
+    state.setCountdownValue(message.data.countdownValue);
+  }
+  
+  // Handle game time left
+  if (message.data.gameTimeLeft !== undefined) {
+    state.setGameTimeLeft(message.data.gameTimeLeft);
+  }
+  
+  // Handle battle royale zone updates
+  if (message.data.battleRoyale) {
+    if (message.data.battleRoyale.radius !== undefined) {
+      state.setBattleRoyaleRadius(message.data.battleRoyale.radius);
+    }
+    if (message.data.battleRoyale.center) {
+      state.setBattleRoyaleCenter(message.data.battleRoyale.center);
+    }
+  }
 };
 
 export const handlePlayerDeathMessage: WebSocketMessageHandler = (message, state) => {

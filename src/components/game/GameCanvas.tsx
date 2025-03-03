@@ -19,6 +19,7 @@ type GameCanvasProps = {
   INACTIVE_PLAYER_OPACITY: number;
   getViewportTransform: (snakeHead: Position) => string;
   currentPlayer: any;
+  children?: React.ReactNode;
 };
 
 const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -32,7 +33,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   MIN_SNAKE_OPACITY,
   INACTIVE_PLAYER_OPACITY,
   getViewportTransform,
-  currentPlayer
+  currentPlayer,
+  children
 }) => {
   // Create hash pattern for the grid background
   const createHashPattern = () => {
@@ -80,6 +82,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
               height: '100%',
             }}
           />
+
+          {/* Battle Royale Zone */}
+          {children}
 
           {/* Yellow dots with map icon */}
           {yellowDots.map((dot, index) => (

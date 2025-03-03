@@ -10,6 +10,8 @@ import Leaderboard from './game/Leaderboard';
 import SpeedBoost from './game/SpeedBoost';
 import StartScreen from './game/StartScreen';
 import GameCanvas from './game/GameCanvas';
+import GameStatus from './game/GameStatus';
+import BattleRoyaleZone from './game/BattleRoyaleZone';
 import useGameWebSocket from './game/useGameWebSocket';
 import useGameCamera from '@/hooks/useGameCamera';
 import useGameControls from '@/hooks/useGameControls';
@@ -26,6 +28,11 @@ const GameBoard: React.FC = () => {
     isPlaying,
     isMinimapVisible,
     minimapTimeLeft,
+    gameStatus,
+    countdownValue,
+    gameTimeLeft,
+    battleRoyaleRadius,
+    battleRoyaleCenter,
     sendDirection,
     sendUpdate,
     sendSpeedBoost,
@@ -39,6 +46,7 @@ const GameBoard: React.FC = () => {
   const currentPlayer = players.find(p => p.id === playerId);
   const score = currentPlayer?.score || 0;
   const speedBoostPercentage = currentPlayer?.speedBoostPercentage || 0;
+  const winner = players.length === 1 && gameOver ? players[0]?.name : undefined;
 
   const { getTransform } = useGameCamera(currentPlayer, CELL_SIZE);
   
@@ -75,6 +83,16 @@ const GameBoard: React.FC = () => {
         />
       )}
 
+      {/* Game status display (waiting, countdown, timer) */}
+      {isPlaying && (
+        <GameStatus 
+          status={gameStatus} 
+          countdownValue={countdownValue}
+          gameTimeLeft={gameTimeLeft}
+          players={players}
+        />
+      )}
+
       <Minimap 
         isMinimapVisible={isMinimapVisible}
         minimapTimeLeft={minimapTimeLeft}
@@ -103,7 +121,17 @@ const GameBoard: React.FC = () => {
         INACTIVE_PLAYER_OPACITY={INACTIVE_PLAYER_OPACITY}
         getViewportTransform={getTransform}
         currentPlayer={currentPlayer}
-      />
+      >
+        {/* Battle Royale Zone */}
+        {battleRoyaleRadius > 0 && battleRoyaleCenter && (
+          <BattleRoyaleZone
+            radius={battleRoyaleRadius}
+            center={battleRoyaleCenter}
+            CELL_SIZE={CELL_SIZE}
+            getViewportTransform={getTransform}
+          />
+        )}
+      </GameCanvas>
 
       <GameControls 
         handleDirection={handleDirection}
@@ -111,7 +139,7 @@ const GameBoard: React.FC = () => {
         setIsSpeedBoostActive={setIsSpeedBoostActive}
       />
 
-      {gameOver && <GameOver score={score} />}
+      {gameOver && <GameOver score={score} winner={winner} />}
     </div>
   );
 };
