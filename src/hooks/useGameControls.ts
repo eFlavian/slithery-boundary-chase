@@ -8,7 +8,6 @@ type UseGameControlsProps = {
   currentPlayer?: any;
   isPlaying: boolean;
   gameOver: boolean;
-  gameStatus: 'waiting' | 'countdown' | 'playing' | 'ended'; // Add gameStatus to the type
 };
 
 const useGameControls = ({
@@ -16,8 +15,7 @@ const useGameControls = ({
   sendUpdate,
   currentPlayer,
   isPlaying,
-  gameOver,
-  gameStatus
+  gameOver
 }: UseGameControlsProps) => {
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
@@ -45,9 +43,6 @@ const useGameControls = ({
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    // Don't process input if game is not in 'playing' status
-    if (gameStatus !== 'playing') return;
-
     if (event.key.startsWith('Arrow')) {
       event.preventDefault();
     }
@@ -101,9 +96,6 @@ const useGameControls = ({
   };
 
   const updateGame = () => {
-    // Don't update the game if not in playing status
-    if (gameStatus !== 'playing') return;
-    
     sendUpdate();
 
     if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage > 0) {
@@ -118,16 +110,12 @@ const useGameControls = ({
   };
 
   useEffect(() => {
-    // Only start the game loop if we're in the 'playing' state
-    if (!gameOver && isPlaying && gameStatus === 'playing') {
+    if (!gameOver && isPlaying) {
       const speed = isSpeedBoostActive ? 140 / 2 : 140;
       gameLoop.current = window.setInterval(updateGame, speed);
       return () => clearInterval(gameLoop.current);
-    } else if (gameLoop.current) {
-      // If we're not playing, clear the interval
-      clearInterval(gameLoop.current);
     }
-  }, [gameOver, direction, isSpeedBoostActive, isPlaying, gameStatus]);
+  }, [gameOver, direction, isSpeedBoostActive, isPlaying]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -136,7 +124,7 @@ const useGameControls = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [direction, currentPlayer?.speedBoostPercentage, gameStatus]);
+  }, [direction, currentPlayer?.speedBoostPercentage]);
 
   return {
     direction,

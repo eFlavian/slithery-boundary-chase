@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { handleMessage } from './websocketHandlers';
@@ -23,6 +24,7 @@ export const useGameWebSocket = () => {
   const [minimapTimeLeft, setMinimapTimeLeft] = useState(0);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   
+  // Battle Royale game states
   const [gameStatus, setGameStatus] = useState<'waiting' | 'countdown' | 'playing' | 'ended'>('waiting');
   const [countdownValue, setCountdownValue] = useState(10);
   const [gameTimeLeft, setGameTimeLeft] = useState(60);
@@ -35,6 +37,7 @@ export const useGameWebSocket = () => {
   const reconnectTimerRef = useRef<number>();
   const countdownIntervalRef = useRef<number>();
 
+  // This function helps us to monitor crucial state changes
   useEffect(() => {
     console.log("Game status changed to:", gameStatus);
     console.log("Countdown value changed to:", countdownValue);
@@ -55,6 +58,7 @@ export const useGameWebSocket = () => {
   const setupMinimapTimers = (duration: number) => {
     let timeLeft = duration;
     
+    // Clear existing countdown interval if it exists
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
     }
@@ -63,7 +67,9 @@ export const useGameWebSocket = () => {
       timeLeft -= 1;
       setMinimapTimeLeft(timeLeft);
       
+      // Start blinking when 3 seconds are left
       if (timeLeft === 3) {
+        // Clear any existing blink interval
         if (minimapBlinkRef.current) {
           clearInterval(minimapBlinkRef.current);
         }
@@ -82,6 +88,7 @@ export const useGameWebSocket = () => {
       }
     }, 1000);
     
+    // Set timeout to stop the minimap visibility
     minimapTimerRef.current = window.setTimeout(() => {
       setIsMinimapVisible(false);
       if (minimapBlinkRef.current) {
@@ -94,6 +101,7 @@ export const useGameWebSocket = () => {
   };
 
   const connectToServer = () => {
+    // Fix for mobile: Use the current hostname instead of hardcoded localhost
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname === 'localhost' ? 'localhost:3001' : window.location.host;
     const wsUrl = `${protocol}//${wsHost}`;
@@ -137,6 +145,7 @@ export const useGameWebSocket = () => {
       console.log('Disconnected from server, code:', event.code, 'reason:', event.reason);
       toast.error('Disconnected from game server');
       
+      // Attempt to reconnect with exponential backoff
       if (reconnectAttempts < 5) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
         console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
@@ -162,25 +171,21 @@ export const useGameWebSocket = () => {
   const sendDirection = (direction: Direction) => {
     if (!wsRef.current || !playerId) return;
     
-    if (gameStatus !== 'playing') return;
-    
     wsRef.current.send(JSON.stringify({
       type: 'direction',
       direction,
       playerId,
-      gameStatus
+      gameStatus // Send the current game status to let server know if game is active
     }));
   };
 
   const sendUpdate = () => {
     if (!wsRef.current || !playerId || gameOver) return;
-    
-    if (gameStatus !== 'playing') return;
 
     wsRef.current.send(JSON.stringify({
       type: 'update',
       playerId,
-      gameStatus
+      gameStatus // Send the current game status to let server know if game is active
     }));
   };
 
