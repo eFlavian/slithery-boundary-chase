@@ -20,6 +20,7 @@ type GameCanvasProps = {
   getViewportTransform: (snakeHead: Position) => string;
   currentPlayer: any;
   children?: React.ReactNode;
+  gameStatus: 'waiting' | 'countdown' | 'playing' | 'ended';
 };
 
 const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -34,7 +35,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   INACTIVE_PLAYER_OPACITY,
   getViewportTransform,
   currentPlayer,
-  children
+  children,
+  gameStatus
 }) => {
   // Create hash pattern for the grid background
   const createHashPattern = () => {
@@ -55,6 +57,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       </div>
     );
   };
+
+  // Determine if game has started (playing) to set ghost mode for players
+  const isGameActive = gameStatus === 'playing';
+  const ghostOpacity = 0.5; // Set ghost opacity for when game hasn't started
 
   return (
     <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
@@ -113,9 +119,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                   height: CELL_SIZE - 1,
                   left: segment.x * CELL_SIZE,
                   top: segment.y * CELL_SIZE,
-                  opacity: player.isPlaying ? 
-                    Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1) : 
-                    INACTIVE_PLAYER_OPACITY,
+                  opacity: isGameActive ? 
+                    (player.isPlaying ? 
+                      Math.max(MIN_SNAKE_OPACITY, 1 - index * 0.1) : 
+                      INACTIVE_PLAYER_OPACITY) : 
+                    ghostOpacity, // Apply ghost opacity when game hasn't started
                   transform: 'translate3d(0, 0, 0)',
                   transition: 'all 150ms linear'
                 }}

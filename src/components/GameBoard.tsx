@@ -121,6 +121,7 @@ const GameBoard: React.FC = () => {
         INACTIVE_PLAYER_OPACITY={INACTIVE_PLAYER_OPACITY}
         getViewportTransform={getTransform}
         currentPlayer={currentPlayer}
+        gameStatus={gameStatus}
       >
         {/* Battle Royale Zone */}
         {battleRoyaleRadius > 0 && battleRoyaleCenter && (
