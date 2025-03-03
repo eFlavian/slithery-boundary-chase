@@ -8,6 +8,7 @@ type UseGameControlsProps = {
   currentPlayer?: any;
   isPlaying: boolean;
   gameOver: boolean;
+  gameStatus: 'waiting' | 'countdown' | 'playing' | 'ended'; // Add gameStatus
 };
 
 const useGameControls = ({
@@ -15,7 +16,8 @@ const useGameControls = ({
   sendUpdate,
   currentPlayer,
   isPlaying,
-  gameOver
+  gameOver,
+  gameStatus // Include gameStatus in props
 }: UseGameControlsProps) => {
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
@@ -31,6 +33,11 @@ const useGameControls = ({
       'RIGHT': 'LEFT'
     };
     
+    // Only allow direction changes if the game is actually playing
+    if (gameStatus !== 'playing') {
+      return;
+    }
+    
     if (oppositeDirections[direction] === newDirection) {
       return;
     }
@@ -43,13 +50,20 @@ const useGameControls = ({
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
+    // Prevent default actions for arrow keys to avoid page scrolling
     if (event.key.startsWith('Arrow')) {
       event.preventDefault();
     }
 
+    // Don't process key events too quickly (debounce)
     const now = Date.now();
     if (now - lastKeyPress.current < 50) return;
     lastKeyPress.current = now;
+    
+    // Only process key events if the game is playing or in countdown mode
+    if (gameStatus !== 'playing' && gameStatus !== 'countdown') {
+      return;
+    }
 
     switch (event.key.toLowerCase()) {
       case 'arrowup':
@@ -82,7 +96,7 @@ const useGameControls = ({
         break;
       case ' ':
         event.preventDefault();
-        if (currentPlayer?.speedBoostPercentage > 0) {
+        if (currentPlayer?.speedBoostPercentage > 0 && gameStatus === 'playing') {
           setIsSpeedBoostActive(true);
         }
         break;
@@ -96,6 +110,11 @@ const useGameControls = ({
   };
 
   const updateGame = () => {
+    // Only send updates if the game is actually playing (not in countdown)
+    if (gameStatus !== 'playing') {
+      return;
+    }
+    
     sendUpdate();
 
     if (isSpeedBoostActive && currentPlayer?.speedBoostPercentage > 0) {
@@ -110,12 +129,26 @@ const useGameControls = ({
   };
 
   useEffect(() => {
-    if (!gameOver && isPlaying) {
+    // Only run the game loop if we're not in a transition state (game over or countdown)
+    if (!gameOver && gameStatus === 'playing') {
+      console.log("Starting game loop - game is actively playing");
       const speed = isSpeedBoostActive ? 140 / 2 : 140;
+      
+      // Clear existing interval before setting a new one
+      if (gameLoop.current) {
+        clearInterval(gameLoop.current);
+      }
+      
       gameLoop.current = window.setInterval(updateGame, speed);
       return () => clearInterval(gameLoop.current);
+    } else {
+      // Clear the interval when not actively playing
+      if (gameLoop.current) {
+        console.log("Clearing game loop - game is not actively playing");
+        clearInterval(gameLoop.current);
+      }
     }
-  }, [gameOver, direction, isSpeedBoostActive, isPlaying]);
+  }, [gameOver, direction, isSpeedBoostActive, gameStatus]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -124,7 +157,7 @@ const useGameControls = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [direction, currentPlayer?.speedBoostPercentage]);
+  }, [direction, currentPlayer?.speedBoostPercentage, gameStatus]);
 
   return {
     direction,

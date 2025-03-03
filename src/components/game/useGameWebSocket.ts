@@ -171,26 +171,43 @@ export const useGameWebSocket = () => {
   const sendDirection = (direction: Direction) => {
     if (!wsRef.current || !playerId) return;
     
+    // Only send direction during actual gameplay, not countdown
+    if (gameStatus !== 'playing') {
+      console.log("Ignoring direction change during non-playing state:", gameStatus);
+      return;
+    }
+    
     wsRef.current.send(JSON.stringify({
       type: 'direction',
       direction,
       playerId,
-      gameStatus // Send the current game status to let server know if game is active
+      gameStatus
     }));
   };
 
   const sendUpdate = () => {
     if (!wsRef.current || !playerId || gameOver) return;
+    
+    // Only send updates during actual gameplay
+    if (gameStatus !== 'playing') {
+      console.log("Ignoring game update during non-playing state:", gameStatus);
+      return;
+    }
 
     wsRef.current.send(JSON.stringify({
       type: 'update',
       playerId,
-      gameStatus // Send the current game status to let server know if game is active
+      gameStatus
     }));
   };
 
   const sendSpeedBoost = () => {
     if (!wsRef.current || !playerId) return;
+    
+    // Only allow speed boost during actual gameplay
+    if (gameStatus !== 'playing') {
+      return;
+    }
     
     wsRef.current.send(JSON.stringify({
       type: 'speedBoost',

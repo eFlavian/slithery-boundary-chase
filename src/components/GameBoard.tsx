@@ -59,7 +59,8 @@ const GameBoard: React.FC = () => {
     sendUpdate,
     currentPlayer,
     isPlaying,
-    gameOver
+    gameOver,
+    gameStatus // Pass gameStatus to useGameControls
   });
 
   const handleStartGame = () => {
