@@ -12,7 +12,10 @@ const gameState = {
   yellowDots: [],
   portals: [],
   playerCount: 0,
-  gameStatus: 'waiting'
+  gameStatus: 'waiting',
+  countdownValue: 20,
+  countdownInterval: null,
+  gameTimeLeft: 120
 };
 
 const GRID_SIZE = 256;
@@ -24,6 +27,7 @@ const FOOD_SPAWN_INTERVAL = 5000;
 const PORTAL_SPAWN_INTERVAL = 20000;
 const YELLOW_DOT_SPAWN_INTERVAL = 60000;
 const MINIMAP_DURATION = 20;
+const COUNTDOWN_START_VALUE = 20;
 
 function getRandomPosition() {
   return {
@@ -128,6 +132,57 @@ function handleCollision(playerId, newHead, gameStatus) {
   return { collision: false };
 }
 
+function startCountdown() {
+  if (gameState.countdownInterval) {
+    clearInterval(gameState.countdownInterval);
+  }
+  
+  gameState.countdownValue = COUNTDOWN_START_VALUE;
+  gameState.gameStatus = 'waiting';
+  
+  broadcastCountdown();
+  
+  gameState.countdownInterval = setInterval(() => {
+    gameState.countdownValue -= 1;
+    
+    console.log(`Countdown: ${gameState.countdownValue}`);
+    
+    broadcastCountdown();
+    
+    if (gameState.countdownValue === 10) {
+      console.log("Switching to countdown mode");
+      gameState.gameStatus = 'countdown';
+      broadcastGameState();
+    }
+    
+    if (gameState.countdownValue <= 0) {
+      clearInterval(gameState.countdownInterval);
+      gameState.countdownInterval = null;
+      
+      gameState.gameStatus = 'playing';
+      console.log("Game starting - countdown finished");
+      
+      broadcastGameState();
+    }
+  }, 1000);
+}
+
+function broadcastCountdown() {
+  const countdownMsg = JSON.stringify({
+    type: 'countdown',
+    data: {
+      countdownValue: gameState.countdownValue,
+      gameStatus: gameState.gameStatus
+    }
+  });
+  
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(countdownMsg);
+    }
+  });
+}
+
 function initializeGame() {
   for (let i = 0; i < INITIAL_NORMAL_FOOD; i++) {
     spawnFood();
@@ -163,7 +218,10 @@ function broadcastGameState() {
     players: playersArray,
     foods: gameState.foods,
     yellowDots: gameState.yellowDots,
-    portals: gameState.portals
+    portals: gameState.portals,
+    gameStatus: gameState.gameStatus,
+    countdownValue: gameState.countdownValue,
+    gameTimeLeft: gameState.gameTimeLeft
   };
 
   const stateMsg = JSON.stringify({
@@ -177,6 +235,32 @@ function broadcastGameState() {
     }
   });
 }
+
+function checkGameConditions() {
+  const activePlayers = Array.from(gameState.players.values()).filter(p => p.isPlaying);
+  const needPlayers = activePlayers.length >= 2;
+  
+  if (needPlayers && gameState.gameStatus === 'waiting' && !gameState.countdownInterval) {
+    console.log("Starting countdown - we have enough players");
+    startCountdown();
+  }
+  
+  if (!needPlayers && gameState.countdownInterval && gameState.gameStatus !== 'playing') {
+    console.log("Cancelling countdown - not enough players");
+    clearInterval(gameState.countdownInterval);
+    gameState.countdownInterval = null;
+    gameState.countdownValue = COUNTDOWN_START_VALUE;
+    gameState.gameStatus = 'waiting';
+    
+    broadcastCountdown();
+    broadcastGameState();
+  }
+}
+
+setInterval(() => {
+  checkGameConditions();
+  broadcastGameState();
+}, 1000);
 
 wss.on('connection', (ws) => {
   const playerId = `player${++gameState.playerCount}`;
@@ -215,6 +299,9 @@ wss.on('connection', (ws) => {
         player.isPlaying = true;
         const newSpawnPos = getRandomUnoccupiedPosition();
         player.snake = [newSpawnPos];
+        
+        checkGameConditions();
+        
         broadcastGameState();
         break;
 
@@ -341,6 +428,9 @@ wss.on('connection', (ws) => {
       clearTimeout(player.minimapTimer);
     }
     gameState.players.delete(playerId);
+    
+    checkGameConditions();
+    
     broadcastGameState();
   });
 });
