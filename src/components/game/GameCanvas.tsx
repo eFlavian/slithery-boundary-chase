@@ -62,11 +62,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   const isGameActive = gameStatus === 'playing';
   const ghostOpacity = 0.5; // Set ghost opacity for when game hasn't started
 
-  useEffect(() => {
-    console.log("GameCanvas - Game status changed to:", gameStatus);
-    console.log("Ghost mode is " + (!isGameActive ? "ENABLED" : "DISABLED"));
-  }, [gameStatus, isGameActive]);
-
   return (
     <div className="fixed inset-0 bg-white dark:bg-gray-800 overflow-hidden">
       <div className="relative w-full h-full">
