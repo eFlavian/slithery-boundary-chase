@@ -16,7 +16,7 @@ localPort = 8080
 externalPort = 80
 
 [workflows]
-runButton = "Start Client"
+runButton = "Start Server"
 
 [[workflows.workflow]]
 name = "Start Server"
@@ -24,7 +24,7 @@ author = 40156862
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd server && npm start"
+args = "cd server && npm install && node index.js"
 
 [[workflows.workflow]]
 name = "Start Client"
